@@ -117,6 +117,24 @@ func (scanner *Scanner) skipWhitespace() {
 	}
 }
 
+func (scanner *Scanner) stringLiteral() Token {
+	for scanner.peek() != '"' && !scanner.isAtEnd() {
+		if scanner.peek() == '\n' {
+			scanner.line++
+		}
+		scanner.advance()
+	}
+
+	if scanner.isAtEnd() {
+		return scanner.ErrorToken("Unterminated string.")
+	}
+
+	scanner.advance()
+
+	str := scanner.source[scanner.start+1 : scanner.current-1]
+	return Token{TOKEN_STRING, str, scanner.line}
+}
+
 func (scanner *Scanner) EOFToken() Token {
 	return Token{TOKEN_EOF, "EOF", scanner.line}
 }
@@ -182,6 +200,8 @@ func (scanner *Scanner) ScanToken() Token {
 			return scanner.MakeToken((TOKEN_GREATER_EQUAL))
 		}
 		return scanner.MakeToken((TOKEN_GREATER))
+	case '"':
+		return scanner.stringLiteral()
 	}
 
 	return scanner.ErrorToken("Unexpected character.")
