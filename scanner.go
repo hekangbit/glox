@@ -70,7 +70,7 @@ func (scanner *Scanner) match(expected byte) bool {
 }
 
 func (scanner *Scanner) isAtEnd() bool {
-	return scanner.current == len(scanner.source)
+	return scanner.current >= len(scanner.source)
 }
 
 func (scanner *Scanner) advance() byte {
@@ -80,7 +80,17 @@ func (scanner *Scanner) advance() byte {
 }
 
 func (scanner *Scanner) peek() byte {
+	if scanner.current >= len(scanner.source) {
+		return 0
+	}
 	return scanner.source[scanner.current]
+}
+
+func (scanner *Scanner) peekNext() byte {
+	if scanner.current >= len(scanner.source)-1 {
+		return 0
+	}
+	return scanner.source[scanner.current+1]
 }
 
 func (scanner *Scanner) skipWhitespace() {
@@ -92,6 +102,15 @@ func (scanner *Scanner) skipWhitespace() {
 		case '\n':
 			scanner.line++
 			scanner.advance()
+		case '/':
+			if scanner.peekNext() != '/' {
+				return
+			}
+			for {
+				if scanner.peek() != '\n' && !scanner.isAtEnd() {
+					scanner.advance()
+				}
+			}
 		default:
 			return
 		}
@@ -112,11 +131,13 @@ func (scanner *Scanner) MakeToken(token_type int) Token {
 }
 
 func (scanner *Scanner) ScanToken() Token {
+	scanner.skipWhitespace()
+
+	scanner.start = scanner.current
 	if scanner.isAtEnd() {
 		return scanner.EOFToken()
 	}
-	scanner.skipWhitespace()
-	scanner.start = scanner.current
+
 	c := scanner.advance()
 	switch c {
 	case '(':
