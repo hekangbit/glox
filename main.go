@@ -6,7 +6,12 @@ import (
 	"os"
 )
 
+func Init() {
+	ScannerInit()
+}
+
 func main() {
+	Init()
 	switch len(os.Args) {
 	case 1:
 		Repl()

@@ -41,6 +41,7 @@ const (
 	TOKEN_TRUE
 	TOKEN_VAR
 	TOKEN_WHILE
+	TOKEN_BREAK
 	TOKEN_EOF
 	TOKEN_ERROR
 )
@@ -56,6 +57,37 @@ type Scanner struct {
 	start   int
 	current int
 	source  string
+}
+
+var keyword map[string]int
+
+func ScannerInit() {
+	keyword = make(map[string]int)
+	keyword["and"] = TOKEN_AND
+	keyword["or"] = TOKEN_OR
+	keyword["true"] = TOKEN_TRUE
+	keyword["false"] = TOKEN_FALSE
+	keyword["if"] = TOKEN_IF
+	keyword["else"] = TOKEN_ELSE
+	keyword["for"] = TOKEN_FOR
+	keyword["while"] = TOKEN_WHILE
+	keyword["var"] = TOKEN_VAR
+	keyword["this"] = TOKEN_THIS
+	keyword["super"] = TOKEN_SUPER
+	keyword["return"] = TOKEN_RETURN
+	keyword["print"] = TOKEN_PRINT
+	keyword["fun"] = TOKEN_FUN
+	keyword["class"] = TOKEN_CLASS
+	keyword["break"] = TOKEN_BREAK
+	keyword["nil"] = TOKEN_NIL
+}
+
+func isDigit(c byte) bool {
+	return c >= '0' && c <= '9'
+}
+
+func isAlpha(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') && c == '_'
 }
 
 func (scanner *Scanner) match(expected byte) bool {
@@ -131,8 +163,36 @@ func (scanner *Scanner) stringLiteral() Token {
 
 	scanner.advance()
 
-	str := scanner.source[scanner.start+1 : scanner.current-1]
-	return Token{TOKEN_STRING, str, scanner.line}
+	// str := scanner.source[scanner.start+1 : scanner.current-1]
+	// return Token{TOKEN_STRING, str, scanner.line}
+	return scanner.MakeToken(TOKEN_STRING)
+}
+
+func (scanner *Scanner) numberLiteral() Token {
+	for isDigit(scanner.peek()) {
+		scanner.advance()
+	}
+	if scanner.peek() == '.' && isDigit(scanner.peekNext()) {
+		scanner.advance()
+		for isDigit(scanner.peek()) {
+			scanner.advance()
+		}
+	}
+	return scanner.MakeToken(TOKEN_NUMBER)
+}
+
+func (scanner *Scanner) identiferToken() Token {
+	for isAlpha(scanner.peek()) || isDigit(scanner.peek()) {
+		scanner.advance()
+	}
+
+	identifer := scanner.source[scanner.start:scanner.current]
+
+	if token_type, ok := keyword[identifer]; ok {
+		return scanner.MakeToken(token_type)
+	}
+
+	return scanner.MakeToken(TOKEN_IDENTIFIER)
 }
 
 func (scanner *Scanner) EOFToken() Token {
@@ -202,6 +262,14 @@ func (scanner *Scanner) ScanToken() Token {
 		return scanner.MakeToken((TOKEN_GREATER))
 	case '"':
 		return scanner.stringLiteral()
+	}
+
+	if isDigit(c) {
+		return scanner.numberLiteral()
+	}
+
+	if isAlpha(c) {
+		return scanner.identiferToken()
 	}
 
 	return scanner.ErrorToken("Unexpected character.")
