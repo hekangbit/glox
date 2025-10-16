@@ -3,7 +3,7 @@ package main
 import "fmt"
 
 const (
-	TOKEN_LEFT_PAREN int = iota + 1 // 1
+	TOKEN_LEFT_PAREN byte = iota + 1 // 1
 	TOKEN_RIGHT_PAREN
 	TOKEN_LEFT_BRACE
 	TOKEN_RIGHT_BRACE
@@ -47,7 +47,7 @@ const (
 )
 
 type Token struct {
-	token_type int
+	token_type byte
 	lexeme     string
 	line       int
 }
@@ -59,10 +59,10 @@ type Scanner struct {
 	source  string
 }
 
-var keyword map[string]int
+var keyword map[string]byte
 
 func ScannerInit() {
-	keyword = make(map[string]int)
+	keyword = make(map[string]byte)
 	keyword["and"] = TOKEN_AND
 	keyword["or"] = TOKEN_OR
 	keyword["true"] = TOKEN_TRUE
@@ -203,7 +203,7 @@ func (scanner *Scanner) ErrorToken(s string) Token {
 	return Token{TOKEN_ERROR, s, scanner.line}
 }
 
-func (scanner *Scanner) MakeToken(token_type int) Token {
+func (scanner *Scanner) MakeToken(token_type byte) Token {
 	var lexeme string = scanner.source[scanner.start:scanner.current]
 	return Token{token_type, lexeme, scanner.line}
 }
@@ -279,7 +279,7 @@ func DumpToken(token Token) {
 	fmt.Printf("%6d: %2d <%s>\n", token.line, token.token_type, token.lexeme)
 }
 
-func Scan(source string) {
+func DumpTokens(source string) {
 	scanner := Scanner{1, 0, 0, source}
 	for {
 		token := scanner.ScanToken()

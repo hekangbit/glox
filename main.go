@@ -48,6 +48,9 @@ func RunFile(path string) error {
 }
 
 func run(source string) error {
-	Scan(source)
+	DumpTokens(source)
+	ok, chunk := Compile(source)
+	fmt.Printf("Compile success: %v\n", ok)
+	DisassembleChunk(chunk, "test chunk")
 	return nil
 }
