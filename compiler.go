@@ -3,7 +3,32 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 )
+
+const (
+	PREC_NONE       byte = iota + 1 // 1
+	PREC_ASSIGNMENT                 // =
+	PREC_OR                         // or
+	PREC_AND                        // and
+	PREC_EQUALITY                   // == !=
+	PREC_COMPARISON                 // < > <= >=
+	PREC_TERM                       // + -
+	PREC_FACTOR                     // * /
+	PREC_UNARY                      // ! -
+	PREC_CALL                       // . ()
+	PREC_PRIMARY
+)
+
+type ParseFn func(*Parser)
+
+type ParseRule struct {
+	prefix     ParseFn
+	infix      ParseFn
+	precedence byte
+}
+
+var rules map[byte]ParseRule
 
 type Parser struct {
 	scanner   Scanner
@@ -14,6 +39,14 @@ type Parser struct {
 	chunk     *Chunk
 }
 
+func (parser *Parser) makeConstant(value float64) byte {
+	offset := AddConstant(parser.chunk, value)
+	if offset > 255 {
+		parser.errorAtPrevious("Too many constants in one chunk.")
+	}
+	return byte(offset)
+}
+
 func (parser *Parser) emitByte(b byte) {
 	WriteChunk(parser.chunk, b, parser.previous.line)
 }
@@ -21,6 +54,10 @@ func (parser *Parser) emitByte(b byte) {
 func (parser *Parser) emitBytes(b1 byte, b2 byte) {
 	parser.emitByte(b1)
 	parser.emitByte(b2)
+}
+
+func (parser *Parser) emitConstant(value float64) {
+	parser.emitBytes(OP_CONSTANT, parser.makeConstant(value))
 }
 
 func (parser *Parser) emitReturn() {
@@ -73,8 +110,113 @@ func (parser *Parser) consume(token_type byte, message string) {
 	parser.errorAtCurrent(message)
 }
 
+func getRule(token_type byte) ParseRule {
+	return rules[token_type]
+}
+
 func (parser *Parser) expression() {
-	// TODO
+	parser.parsePrecedence(PREC_ASSIGNMENT)
+}
+
+func (parser *Parser) number() {
+	value, err := strconv.ParseFloat(parser.previous.lexeme, 64)
+	if err != nil {
+		parser.errorAtPrevious("Failed convert string to number.")
+		return
+	}
+	parser.emitConstant(value)
+}
+
+func (parser *Parser) grouping() {
+	parser.expression()
+	parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.")
+}
+
+func (parser *Parser) unary() {
+	operator_type := parser.previous.token_type
+	parser.parsePrecedence(PREC_UNARY)
+	switch operator_type {
+	case TOKEN_MINUS:
+		parser.emitByte(OP_NEGATE)
+	}
+}
+
+func (parser *Parser) binary() {
+	operator_type := parser.previous.token_type
+	rule := getRule(operator_type)
+	parser.parsePrecedence(rule.precedence + 1)
+	switch operator_type {
+	case TOKEN_PLUS:
+		parser.emitByte(OP_ADD)
+	case TOKEN_MINUS:
+		parser.emitByte(OP_SUBTRACT)
+	case TOKEN_STAR:
+		parser.emitByte(OP_MULTIPLY)
+	case TOKEN_SLASH:
+		parser.emitByte(OP_DIVIDE)
+	}
+}
+
+func (parser *Parser) parsePrecedence(precedence byte) {
+	parser.advance()
+	prefix := getRule(parser.previous.token_type).prefix
+	if prefix == nil {
+		parser.errorAtPrevious("Expect expression.")
+		return
+	}
+
+	prefix(parser)
+
+	for precedence <= getRule(parser.current.token_type).precedence {
+		parser.advance()
+		infix := getRule(parser.previous.token_type).infix
+		infix(parser)
+	}
+}
+
+func CompilerInit() {
+	rules = map[byte]ParseRule{
+		TOKEN_LEFT_PAREN:    {(*Parser).grouping, nil, PREC_NONE},
+		TOKEN_RIGHT_PAREN:   {nil, nil, PREC_NONE},
+		TOKEN_LEFT_BRACE:    {nil, nil, PREC_NONE},
+		TOKEN_RIGHT_BRACE:   {nil, nil, PREC_NONE},
+		TOKEN_COMMA:         {nil, nil, PREC_NONE},
+		TOKEN_DOT:           {nil, nil, PREC_NONE},
+		TOKEN_MINUS:         {(*Parser).unary, (*Parser).binary, PREC_TERM},
+		TOKEN_PLUS:          {nil, (*Parser).binary, PREC_TERM},
+		TOKEN_SEMICOLON:     {nil, nil, PREC_NONE},
+		TOKEN_SLASH:         {nil, (*Parser).binary, PREC_FACTOR},
+		TOKEN_STAR:          {nil, (*Parser).binary, PREC_FACTOR},
+		TOKEN_BANG:          {nil, nil, PREC_NONE},
+		TOKEN_BANG_EQUAL:    {nil, nil, PREC_NONE},
+		TOKEN_EQUAL:         {nil, nil, PREC_NONE},
+		TOKEN_EQUAL_EQUAL:   {nil, nil, PREC_NONE},
+		TOKEN_GREATER:       {nil, nil, PREC_NONE},
+		TOKEN_GREATER_EQUAL: {nil, nil, PREC_NONE},
+		TOKEN_LESS:          {nil, nil, PREC_NONE},
+		TOKEN_LESS_EQUAL:    {nil, nil, PREC_NONE},
+		TOKEN_IDENTIFIER:    {nil, nil, PREC_NONE},
+		TOKEN_STRING:        {nil, nil, PREC_NONE},
+		TOKEN_NUMBER:        {(*Parser).number, nil, PREC_NONE},
+		TOKEN_AND:           {nil, nil, PREC_NONE},
+		TOKEN_CLASS:         {nil, nil, PREC_NONE},
+		TOKEN_ELSE:          {nil, nil, PREC_NONE},
+		TOKEN_FALSE:         {nil, nil, PREC_NONE},
+		TOKEN_FOR:           {nil, nil, PREC_NONE},
+		TOKEN_FUN:           {nil, nil, PREC_NONE},
+		TOKEN_IF:            {nil, nil, PREC_NONE},
+		TOKEN_NIL:           {nil, nil, PREC_NONE},
+		TOKEN_OR:            {nil, nil, PREC_NONE},
+		TOKEN_PRINT:         {nil, nil, PREC_NONE},
+		TOKEN_RETURN:        {nil, nil, PREC_NONE},
+		TOKEN_SUPER:         {nil, nil, PREC_NONE},
+		TOKEN_THIS:          {nil, nil, PREC_NONE},
+		TOKEN_TRUE:          {nil, nil, PREC_NONE},
+		TOKEN_VAR:           {nil, nil, PREC_NONE},
+		TOKEN_WHILE:         {nil, nil, PREC_NONE},
+		TOKEN_ERROR:         {nil, nil, PREC_NONE},
+		TOKEN_EOF:           {nil, nil, PREC_NONE},
+	}
 }
 
 func Compile(source string) (bool, *Chunk) {
