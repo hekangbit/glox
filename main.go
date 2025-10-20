@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 )
@@ -11,6 +12,15 @@ func Init() {
 }
 
 func main() {
+	// var v Value
+	// v.SetInt(42)
+	// fmt.Printf("Value: %s, Type: %d\n", v.String(), v.Type())
+	// v.SetFloat(3.14)
+	// fmt.Printf("Value: %s, Type: %d\n", v.String(), v.Type())
+	// if f, ok := v.GetFloat(); ok {
+	// 	fmt.Printf("Float value: %f\n", f)
+	// }
+
 	Init()
 	switch len(os.Args) {
 	case 1:
@@ -44,16 +54,16 @@ func RunFile(path string) error {
 	if err != nil {
 		return err
 	}
-	return run(string(src))
+	return Run(string(src))
 }
 
-func run(source string) error {
+func Run(source string) error {
 	CompilerInit()
 	DumpTokens(source)
 	ok, chunk := Compile(source)
-	fmt.Printf("Compile success: %v\n", ok)
-	if ok {
-		DisassembleChunk(chunk, "test chunk")
+	if !ok {
+		return errors.New("Compile fail")
 	}
+	Interprete(chunk)
 	return nil
 }

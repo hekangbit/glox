@@ -39,7 +39,7 @@ type Parser struct {
 	chunk     *Chunk
 }
 
-func (parser *Parser) makeConstant(value float64) byte {
+func (parser *Parser) makeConstant(value Value) byte {
 	offset := AddConstant(parser.chunk, value)
 	if offset > 255 {
 		parser.errorAtPrevious("Too many constants in one chunk.")
@@ -56,7 +56,7 @@ func (parser *Parser) emitBytes(b1 byte, b2 byte) {
 	parser.emitByte(b2)
 }
 
-func (parser *Parser) emitConstant(value float64) {
+func (parser *Parser) emitConstant(value Value) {
 	parser.emitBytes(OP_CONSTANT, parser.makeConstant(value))
 }
 
@@ -124,7 +124,7 @@ func (parser *Parser) number() {
 		parser.errorAtPrevious("Failed convert string to number.")
 		return
 	}
-	parser.emitConstant(value)
+	parser.emitConstant(NewFloat(value))
 }
 
 func (parser *Parser) grouping() {
@@ -225,13 +225,12 @@ func Compile(source string) (bool, *Chunk) {
 	parser.advance()
 	parser.expression()
 	parser.consume(TOKEN_EOF, "Expect end of expression.")
-
-	// temp
-	AddConstant(&chunk, 12.345)
-	parser.emitByte(OP_CONSTANT)
-	parser.emitByte(0)
-
 	parser.emitReturn()
+
+	if !parser.hadError {
+		fmt.Println("Compile success!")
+		DisassembleChunk(&chunk, "test chunk")
+	}
 
 	return !parser.hadError, &chunk
 }

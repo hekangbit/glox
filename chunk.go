@@ -10,21 +10,18 @@ const (
 	OP_RETURN
 )
 
-type BCode struct {
-	bcode byte
-	line  int
-}
-
 type Chunk struct {
-	bcodes    []BCode
-	constants []float64
+	bcodes    []byte
+	lines     []int
+	constants []Value
 }
 
 func WriteChunk(chunk *Chunk, bcode byte, line int) {
-	chunk.bcodes = append(chunk.bcodes, BCode{bcode, line})
+	chunk.bcodes = append(chunk.bcodes, bcode)
+	chunk.lines = append(chunk.lines, line)
 }
 
-func AddConstant(chunk *Chunk, c float64) int {
+func AddConstant(chunk *Chunk, c Value) int {
 	chunk.constants = append(chunk.constants, c)
 	return len(chunk.constants) - 1
 }

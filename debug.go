@@ -8,7 +8,7 @@ func SimpleInstruction(name string, offset int) int {
 }
 
 func ConstInstruction(name string, chunk *Chunk, offset int) int {
-	constant_index := chunk.bcodes[offset+1].bcode
+	constant_index := chunk.bcodes[offset+1]
 	fmt.Printf("%-16s %4d '", name, constant_index)
 	fmt.Printf("%v'\n", chunk.constants[constant_index])
 	return offset + 2
@@ -17,7 +17,7 @@ func ConstInstruction(name string, chunk *Chunk, offset int) int {
 func DisassembleInstruction(chunk *Chunk, offset int) int {
 	fmt.Printf("%04d ", offset)
 
-	instruction := chunk.bcodes[offset].bcode
+	instruction := chunk.bcodes[offset]
 	switch instruction {
 	case OP_CONSTANT:
 		return ConstInstruction("OP_CONSTANT", chunk, offset)

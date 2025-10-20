@@ -1,5 +1,126 @@
 package main
 
-func Interprete(chunk *Chunk) {
+import (
+	"fmt"
+	"os"
+)
 
+type VM struct {
+	chunk  *Chunk
+	ip     int
+	vstack []Value
+}
+
+func (vm *VM) pushVstack(value Value) {
+	vm.vstack = append(vm.vstack, value)
+}
+
+func (vm *VM) popVstack() Value {
+	value := vm.vstack[len(vm.vstack)-1]
+	vm.vstack = vm.vstack[:len(vm.vstack)-1]
+	return value
+}
+
+func (vm *VM) topVstack() Value {
+	return vm.vstack[len(vm.vstack)-1]
+}
+
+func (vm *VM) peekVstack(offset int) Value {
+	return vm.vstack[len(vm.vstack)-1-offset]
+}
+
+func (vm *VM) sizeVstack() int {
+	return len(vm.vstack)
+}
+
+func (vm *VM) resetStack() {
+	vm.vstack = nil
+}
+
+func (vm *VM) RuntimeError(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, format, args...)
+	fmt.Fprintf(os.Stderr, "\n")
+	line := vm.chunk.lines[vm.ip-1]
+	fmt.Fprintf(os.Stderr, "[line %d] in script\n", line)
+	vm.resetStack()
+}
+
+func runVM(vm *VM) bool {
+	for {
+		fmt.Print("          ")
+		for _, v := range vm.vstack {
+			fmt.Print("[ ")
+			fmt.Printf("%s", v.String())
+			fmt.Print(" ]")
+		}
+		fmt.Print("\n")
+		DisassembleInstruction(vm.chunk, vm.ip)
+
+		instruction := vm.chunk.bcodes[vm.ip]
+		vm.ip++
+		switch instruction {
+		case OP_CONSTANT:
+			pos := vm.chunk.bcodes[vm.ip]
+			vm.ip++
+			value := vm.chunk.constants[pos]
+			vm.pushVstack(value)
+		case OP_NEGATE:
+			if !(vm.peekVstack(0).IsFloat()) {
+				vm.RuntimeError("Operand must be a number for negate op.")
+				return false
+			}
+			value := vm.popVstack()
+			num, _ := value.GetFloat()
+			vm.pushVstack(NewFloat(-num))
+		case OP_ADD:
+			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
+				left, _ := vm.popVstack().GetFloat()
+				right, _ := vm.popVstack().GetFloat()
+				vm.pushVstack(NewFloat(left + right))
+			} else if vm.peekVstack(0).IsString() && vm.peekVstack(1).IsString() {
+				left, _ := vm.popVstack().GetString()
+				right, _ := vm.popVstack().GetString()
+				vm.pushVstack(NewString(left + right))
+			} else {
+				vm.RuntimeError("Operand must be a number or string for add op.")
+				return false
+			}
+		case OP_SUBTRACT:
+			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
+				left, _ := vm.popVstack().GetFloat()
+				right, _ := vm.popVstack().GetFloat()
+				vm.pushVstack(NewFloat(left - right))
+			} else {
+				vm.RuntimeError("Operand must be a number for sub op.")
+				return false
+			}
+		case OP_MULTIPLY:
+			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
+				left, _ := vm.popVstack().GetFloat()
+				right, _ := vm.popVstack().GetFloat()
+				vm.pushVstack(NewFloat(left * right))
+			} else {
+				vm.RuntimeError("Operand must be a number for multiply op.")
+				return false
+			}
+		case OP_DIVIDE:
+			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
+				left, _ := vm.popVstack().GetFloat()
+				right, _ := vm.popVstack().GetFloat()
+				vm.pushVstack(NewFloat(left / right))
+			} else {
+				vm.RuntimeError("Operand must be a number for divide op.")
+				return false
+			}
+		case OP_RETURN:
+			fmt.Printf("%s\n", vm.popVstack().String())
+			return true
+		}
+	}
+}
+
+func Interprete(chunk *Chunk) {
+	vm := VM{chunk: chunk, ip: 0, vstack: make([]Value, 0)}
+	ok := runVM(&vm)
+	fmt.Printf("Runtime result: %v", ok)
 }
