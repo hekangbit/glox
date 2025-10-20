@@ -2,6 +2,9 @@ package main
 
 const (
 	OP_CONSTANT byte = iota + 1 // 1
+	OP_NIL
+	OP_TRUE
+	OP_FALSE
 	OP_NEGATE
 	OP_ADD
 	OP_SUBTRACT

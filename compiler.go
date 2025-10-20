@@ -157,6 +157,17 @@ func (parser *Parser) binary() {
 	}
 }
 
+func (parser *Parser) literal() {
+	switch parser.previous.token_type {
+	case TOKEN_FALSE:
+		parser.emitByte(OP_FALSE)
+	case TOKEN_TRUE:
+		parser.emitByte(OP_TRUE)
+	case TOKEN_NIL:
+		parser.emitByte(OP_NIL)
+	}
+}
+
 func (parser *Parser) parsePrecedence(precedence byte) {
 	parser.advance()
 	prefix := getRule(parser.previous.token_type).prefix
@@ -201,17 +212,17 @@ func CompilerInit() {
 		TOKEN_AND:           {nil, nil, PREC_NONE},
 		TOKEN_CLASS:         {nil, nil, PREC_NONE},
 		TOKEN_ELSE:          {nil, nil, PREC_NONE},
-		TOKEN_FALSE:         {nil, nil, PREC_NONE},
+		TOKEN_FALSE:         {(*Parser).literal, nil, PREC_NONE},
 		TOKEN_FOR:           {nil, nil, PREC_NONE},
 		TOKEN_FUN:           {nil, nil, PREC_NONE},
 		TOKEN_IF:            {nil, nil, PREC_NONE},
-		TOKEN_NIL:           {nil, nil, PREC_NONE},
+		TOKEN_NIL:           {(*Parser).literal, nil, PREC_NONE},
 		TOKEN_OR:            {nil, nil, PREC_NONE},
 		TOKEN_PRINT:         {nil, nil, PREC_NONE},
 		TOKEN_RETURN:        {nil, nil, PREC_NONE},
 		TOKEN_SUPER:         {nil, nil, PREC_NONE},
 		TOKEN_THIS:          {nil, nil, PREC_NONE},
-		TOKEN_TRUE:          {nil, nil, PREC_NONE},
+		TOKEN_TRUE:          {(*Parser).literal, nil, PREC_NONE},
 		TOKEN_VAR:           {nil, nil, PREC_NONE},
 		TOKEN_WHILE:         {nil, nil, PREC_NONE},
 		TOKEN_ERROR:         {nil, nil, PREC_NONE},

@@ -56,6 +56,12 @@ func runVM(vm *VM) bool {
 			vm.ip++
 			value := vm.chunk.constants[pos]
 			vm.pushVstack(value)
+		case OP_NIL:
+			vm.pushVstack(NewNil())
+		case OP_FALSE:
+			vm.pushVstack(NewBool(false))
+		case OP_TRUE:
+			vm.pushVstack(NewBool(true))
 		case OP_NEGATE:
 			if !(vm.peekVstack(0).IsFloat()) {
 				vm.RuntimeError("Operand must be a number for negate op.")

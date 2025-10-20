@@ -21,6 +21,14 @@ func DisassembleInstruction(chunk *Chunk, offset int) int {
 	switch instruction {
 	case OP_CONSTANT:
 		return ConstInstruction("OP_CONSTANT", chunk, offset)
+	case OP_NIL:
+		return SimpleInstruction("OP_NIL", offset)
+	case OP_FALSE:
+		return SimpleInstruction("OP_FALSE", offset)
+	case OP_TRUE:
+		return SimpleInstruction("OP_TRUE", offset)
+	case OP_NEGATE:
+		return SimpleInstruction("OP_NEGATE", offset)
 	case OP_ADD:
 		return SimpleInstruction("OP_ADD", offset)
 	case OP_SUBTRACT:

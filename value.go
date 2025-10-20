@@ -8,6 +8,7 @@ type VariantType int
 
 const (
 	TypeInt VariantType = iota
+	TypeNil
 	TypeFloat
 	TypeString
 	TypeBool
@@ -22,6 +23,10 @@ type Variant struct {
 }
 
 type Value Variant
+
+func NewNil() Value {
+	return Value{typ: TypeNil, iVal: 0}
+}
 
 func NewInt(v int) Value {
 	return Value{typ: TypeInt, iVal: v}
@@ -41,6 +46,10 @@ func NewBool(v bool) Value {
 
 func (v Value) Type() VariantType {
 	return v.typ
+}
+
+func (v Value) IsNil() bool {
+	return v.Type() == TypeNil
 }
 
 func (v Value) IsInt() bool {
@@ -87,6 +96,11 @@ func (v Value) GetBool() (bool, bool) {
 	return false, false
 }
 
+func (v *Value) SetNil() {
+	v.typ = TypeNil
+	v.iVal = 0
+}
+
 func (v *Value) SetInt(i int) {
 	v.typ = TypeInt
 	v.iVal = i
@@ -109,6 +123,8 @@ func (v *Value) SetBool(b bool) {
 
 func (v Value) String() string {
 	switch v.typ {
+	case TypeNil:
+		return "nil"
 	case TypeInt:
 		return fmt.Sprintf("%d", v.iVal)
 	case TypeFloat:
