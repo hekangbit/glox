@@ -21,16 +21,8 @@ func (vm *VM) popVstack() Value {
 	return value
 }
 
-func (vm *VM) topVstack() Value {
-	return vm.vstack[len(vm.vstack)-1]
-}
-
 func (vm *VM) peekVstack(offset int) Value {
 	return vm.vstack[len(vm.vstack)-1-offset]
-}
-
-func (vm *VM) sizeVstack() int {
-	return len(vm.vstack)
 }
 
 func (vm *VM) resetStack() {
@@ -82,7 +74,7 @@ func runVM(vm *VM) bool {
 				right, _ := vm.popVstack().GetString()
 				vm.pushVstack(NewString(left + right))
 			} else {
-				vm.RuntimeError("Operand must be a number or string for add op.")
+				vm.RuntimeError("Operand must be number or string for add op.")
 				return false
 			}
 		case OP_SUBTRACT:
@@ -91,7 +83,7 @@ func runVM(vm *VM) bool {
 				right, _ := vm.popVstack().GetFloat()
 				vm.pushVstack(NewFloat(left - right))
 			} else {
-				vm.RuntimeError("Operand must be a number for sub op.")
+				vm.RuntimeError("Operand must be number for sub op.")
 				return false
 			}
 		case OP_MULTIPLY:
@@ -100,7 +92,7 @@ func runVM(vm *VM) bool {
 				right, _ := vm.popVstack().GetFloat()
 				vm.pushVstack(NewFloat(left * right))
 			} else {
-				vm.RuntimeError("Operand must be a number for multiply op.")
+				vm.RuntimeError("Operand must be number for multiply op.")
 				return false
 			}
 		case OP_DIVIDE:
@@ -109,7 +101,7 @@ func runVM(vm *VM) bool {
 				right, _ := vm.popVstack().GetFloat()
 				vm.pushVstack(NewFloat(left / right))
 			} else {
-				vm.RuntimeError("Operand must be a number for divide op.")
+				vm.RuntimeError("Operand must be number for divide op.")
 				return false
 			}
 		case OP_RETURN:
@@ -121,6 +113,7 @@ func runVM(vm *VM) bool {
 
 func Interprete(chunk *Chunk) {
 	vm := VM{chunk: chunk, ip: 0, vstack: make([]Value, 0)}
+	fmt.Printf("-- VM Runtime start\n")
 	ok := runVM(&vm)
-	fmt.Printf("Runtime result: %v", ok)
+	fmt.Printf("-- VM Runtime result: %v\n", ok)
 }
