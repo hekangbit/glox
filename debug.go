@@ -27,6 +27,8 @@ func DisassembleInstruction(chunk *Chunk, offset int) int {
 		return SimpleInstruction("OP_FALSE", offset)
 	case OP_TRUE:
 		return SimpleInstruction("OP_TRUE", offset)
+	case OP_NOT:
+		return SimpleInstruction("OP_NOT", offset)
 	case OP_NEGATE:
 		return SimpleInstruction("OP_NEGATE", offset)
 	case OP_ADD:

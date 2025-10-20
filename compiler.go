@@ -138,6 +138,8 @@ func (parser *Parser) unary() {
 	switch operator_type {
 	case TOKEN_MINUS:
 		parser.emitByte(OP_NEGATE)
+	case TOKEN_BANG:
+		parser.emitByte(OP_NOT)
 	}
 }
 
@@ -198,7 +200,7 @@ func CompilerInit() {
 		TOKEN_SEMICOLON:     {nil, nil, PREC_NONE},
 		TOKEN_SLASH:         {nil, (*Parser).binary, PREC_FACTOR},
 		TOKEN_STAR:          {nil, (*Parser).binary, PREC_FACTOR},
-		TOKEN_BANG:          {nil, nil, PREC_NONE},
+		TOKEN_BANG:          {(*Parser).unary, nil, PREC_NONE},
 		TOKEN_BANG_EQUAL:    {nil, nil, PREC_NONE},
 		TOKEN_EQUAL:         {nil, nil, PREC_NONE},
 		TOKEN_EQUAL_EQUAL:   {nil, nil, PREC_NONE},

@@ -11,6 +11,17 @@ type VM struct {
 	vstack []Value
 }
 
+func isfalsey(value Value) bool {
+	if value.IsNil() {
+		return true
+	}
+	if value.IsBool() {
+		v, _ := value.GetBool()
+		return !v
+	}
+	return false
+}
+
 func (vm *VM) pushVstack(value Value) {
 	vm.vstack = append(vm.vstack, value)
 }
@@ -62,14 +73,16 @@ func runVM(vm *VM) bool {
 			vm.pushVstack(NewBool(false))
 		case OP_TRUE:
 			vm.pushVstack(NewBool(true))
+		case OP_NOT:
+			vm.pushVstack(NewBool(isfalsey(vm.peekVstack(0))))
 		case OP_NEGATE:
 			if !(vm.peekVstack(0).IsFloat()) {
-				vm.RuntimeError("Operand must be a number for negate op.")
+				vm.RuntimeError("Operand must be number for negate op.")
 				return false
 			}
 			value := vm.popVstack()
-			num, _ := value.GetFloat()
-			vm.pushVstack(NewFloat(-num))
+			tmp, _ := value.GetFloat()
+			vm.pushVstack(NewFloat(-tmp))
 		case OP_ADD:
 			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
 				left, _ := vm.popVstack().GetFloat()
