@@ -22,6 +22,27 @@ func isfalsey(value Value) bool {
 	return false
 }
 
+func valueEqual(v1, v2 Value) bool {
+	if v1.typ != v2.typ {
+		return false
+	}
+	switch v1.typ {
+	case TypeNil:
+		return true
+	case TypeBool:
+		return isfalsey(v1) == isfalsey(v2)
+	case TypeInt:
+		a, _ := v1.GetInt()
+		b, _ := v2.GetInt()
+		return a == b
+	case TypeFloat:
+		a, _ := v1.GetFloat()
+		b, _ := v2.GetFloat()
+		return a == b
+	}
+	return false
+}
+
 func (vm *VM) pushVstack(value Value) {
 	vm.vstack = append(vm.vstack, value)
 }
@@ -83,6 +104,28 @@ func runVM(vm *VM) bool {
 			value := vm.popVstack()
 			tmp, _ := value.GetFloat()
 			vm.pushVstack(NewFloat(-tmp))
+		case OP_EQUAL:
+			a := vm.popVstack()
+			b := vm.popVstack()
+			vm.pushVstack(NewBool(valueEqual(a, b)))
+		case OP_GREATER:
+			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
+				left, _ := vm.popVstack().GetFloat()
+				right, _ := vm.popVstack().GetFloat()
+				vm.pushVstack(NewBool(left > right))
+			} else {
+				vm.RuntimeError("Operand must be number for > op.")
+				return false
+			}
+		case OP_LESS:
+			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
+				left, _ := vm.popVstack().GetFloat()
+				right, _ := vm.popVstack().GetFloat()
+				vm.pushVstack(NewBool(left < right))
+			} else {
+				vm.RuntimeError("Operand must be number for > op.")
+				return false
+			}
 		case OP_ADD:
 			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
 				left, _ := vm.popVstack().GetFloat()

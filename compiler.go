@@ -148,6 +148,18 @@ func (parser *Parser) binary() {
 	rule := getRule(operator_type)
 	parser.parsePrecedence(rule.precedence + 1)
 	switch operator_type {
+	case TOKEN_BANG_EQUAL:
+		parser.emitBytes(OP_EQUAL, OP_NOT)
+	case TOKEN_EQUAL_EQUAL:
+		parser.emitByte(OP_EQUAL)
+	case TOKEN_GREATER:
+		parser.emitByte(OP_GREATER)
+	case TOKEN_GREATER_EQUAL:
+		parser.emitBytes(OP_LESS, OP_NOT)
+	case TOKEN_LESS:
+		parser.emitByte(OP_LESS)
+	case TOKEN_LESS_EQUAL:
+		parser.emitBytes(OP_GREATER, OP_NOT)
 	case TOKEN_PLUS:
 		parser.emitByte(OP_ADD)
 	case TOKEN_MINUS:
@@ -201,13 +213,13 @@ func CompilerInit() {
 		TOKEN_SLASH:         {nil, (*Parser).binary, PREC_FACTOR},
 		TOKEN_STAR:          {nil, (*Parser).binary, PREC_FACTOR},
 		TOKEN_BANG:          {(*Parser).unary, nil, PREC_NONE},
-		TOKEN_BANG_EQUAL:    {nil, nil, PREC_NONE},
+		TOKEN_BANG_EQUAL:    {nil, (*Parser).binary, PREC_EQUALITY},
 		TOKEN_EQUAL:         {nil, nil, PREC_NONE},
-		TOKEN_EQUAL_EQUAL:   {nil, nil, PREC_NONE},
-		TOKEN_GREATER:       {nil, nil, PREC_NONE},
-		TOKEN_GREATER_EQUAL: {nil, nil, PREC_NONE},
-		TOKEN_LESS:          {nil, nil, PREC_NONE},
-		TOKEN_LESS_EQUAL:    {nil, nil, PREC_NONE},
+		TOKEN_EQUAL_EQUAL:   {nil, (*Parser).binary, PREC_EQUALITY},
+		TOKEN_GREATER:       {nil, (*Parser).binary, PREC_COMPARISON},
+		TOKEN_GREATER_EQUAL: {nil, (*Parser).binary, PREC_COMPARISON},
+		TOKEN_LESS:          {nil, (*Parser).binary, PREC_COMPARISON},
+		TOKEN_LESS_EQUAL:    {nil, (*Parser).binary, PREC_COMPARISON},
 		TOKEN_IDENTIFIER:    {nil, nil, PREC_NONE},
 		TOKEN_STRING:        {nil, nil, PREC_NONE},
 		TOKEN_NUMBER:        {(*Parser).number, nil, PREC_NONE},
