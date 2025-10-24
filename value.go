@@ -24,6 +24,31 @@ type Variant struct {
 
 type Value Variant
 
+func ValueEqual(v1, v2 Value) bool {
+	if v1.typ != v2.typ {
+		return false
+	}
+	switch v1.typ {
+	case TypeNil:
+		return true
+	case TypeBool:
+		return isfalsey(v1) == isfalsey(v2)
+	case TypeInt:
+		a, _ := v1.GetInt()
+		b, _ := v2.GetInt()
+		return a == b
+	case TypeFloat:
+		a, _ := v1.GetFloat()
+		b, _ := v2.GetFloat()
+		return a == b
+	case TypeString:
+		a, _ := v1.GetString()
+		b, _ := v2.GetString()
+		return a == b
+	}
+	return false
+}
+
 func NewNil() Value {
 	return Value{typ: TypeNil, iVal: 0}
 }

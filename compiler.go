@@ -182,6 +182,10 @@ func (parser *Parser) literal() {
 	}
 }
 
+func (parser *Parser) stringRule() {
+	parser.emitConstant(NewString(parser.previous.lexeme[1 : len(parser.previous.lexeme)-1]))
+}
+
 func (parser *Parser) parsePrecedence(precedence byte) {
 	parser.advance()
 	prefix := getRule(parser.previous.token_type).prefix
@@ -221,7 +225,7 @@ func CompilerInit() {
 		TOKEN_LESS:          {nil, (*Parser).binary, PREC_COMPARISON},
 		TOKEN_LESS_EQUAL:    {nil, (*Parser).binary, PREC_COMPARISON},
 		TOKEN_IDENTIFIER:    {nil, nil, PREC_NONE},
-		TOKEN_STRING:        {nil, nil, PREC_NONE},
+		TOKEN_STRING:        {(*Parser).stringRule, nil, PREC_NONE},
 		TOKEN_NUMBER:        {(*Parser).number, nil, PREC_NONE},
 		TOKEN_AND:           {nil, nil, PREC_NONE},
 		TOKEN_CLASS:         {nil, nil, PREC_NONE},
