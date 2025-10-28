@@ -15,6 +15,7 @@ const (
 	OP_MULTIPLY
 	OP_DIVIDE
 	OP_PRINT
+	OP_POP
 	OP_RETURN
 )
 

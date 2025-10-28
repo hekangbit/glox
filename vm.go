@@ -156,6 +156,8 @@ func runVM(vm *VM) bool {
 			return true
 		case OP_PRINT:
 			fmt.Printf("%s\n", vm.popVstack().String())
+		case OP_POP:
+			vm.popVstack()
 		}
 	}
 	return true

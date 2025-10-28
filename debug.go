@@ -49,6 +49,8 @@ func DisassembleInstruction(chunk *Chunk, offset int) int {
 		return SimpleInstruction("OP_RETURN", offset)
 	case OP_PRINT:
 		return SimpleInstruction("OP_PRINT", offset)
+	case OP_POP:
+		return SimpleInstruction("OP_POP", offset)
 	default:
 		fmt.Printf("Unknown opcode %v\n", instruction)
 		return offset + 1

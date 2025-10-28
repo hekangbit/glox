@@ -221,14 +221,39 @@ func (parser *Parser) printStatement() {
 	parser.emitByte(OP_PRINT)
 }
 
+func (parser *Parser) expressionStatement() {
+	parser.expression()
+	parser.consume(TOKEN_SEMICOLON, "Expect '; after expression.")
+	parser.emitByte(OP_POP)
+}
+
 func (parser *Parser) statement() {
 	if parser.match(TOKEN_PRINT) {
 		parser.printStatement()
+	} else {
+		parser.expressionStatement()
+	}
+}
+
+func (parser *Parser) synchronize() {
+	parser.panicMode = false
+	for parser.current.token_type != TOKEN_EOF {
+		if parser.previous.token_type == TOKEN_SEMICOLON {
+			return
+		}
+		switch parser.current.token_type {
+		case TOKEN_CLASS, TOKEN_FUN, TOKEN_VAR, TOKEN_FOR, TOKEN_WHILE, TOKEN_IF, TOKEN_PRINT, TOKEN_RETURN:
+			return
+		}
+		parser.advance()
 	}
 }
 
 func (parser *Parser) declaration() {
 	parser.statement()
+	if parser.panicMode {
+		parser.synchronize()
+	}
 }
 
 func CompilerInit() {
