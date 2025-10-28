@@ -203,6 +203,34 @@ func (parser *Parser) parsePrecedence(precedence byte) {
 	}
 }
 
+func (parser *Parser) check(token_type byte) bool {
+	return parser.current.token_type == token_type
+}
+
+func (parser *Parser) match(token_type byte) bool {
+	if !parser.check(token_type) {
+		return false
+	}
+	parser.advance()
+	return true
+}
+
+func (parser *Parser) printStatement() {
+	parser.expression()
+	parser.consume(TOKEN_SEMICOLON, "Expect ';' after value.")
+	parser.emitByte(OP_PRINT)
+}
+
+func (parser *Parser) statement() {
+	if parser.match(TOKEN_PRINT) {
+		parser.printStatement()
+	}
+}
+
+func (parser *Parser) declaration() {
+	parser.statement()
+}
+
 func CompilerInit() {
 	rules = map[byte]ParseRule{
 		TOKEN_LEFT_PAREN:    {(*Parser).grouping, nil, PREC_NONE},
@@ -252,9 +280,10 @@ func Compile(source string) (bool, *Chunk) {
 	var chunk Chunk
 	parser := Parser{scanner: Scanner{1, 0, 0, source}, chunk: &chunk}
 	parser.advance()
-	parser.expression()
-	parser.consume(TOKEN_EOF, "Expect end of expression.")
-	parser.emitReturn()
+
+	for !parser.match(TOKEN_EOF) {
+		parser.declaration()
+	}
 
 	if !parser.hadError {
 		fmt.Println("Compile success!")

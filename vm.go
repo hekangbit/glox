@@ -36,6 +36,10 @@ func (vm *VM) peekVstack(offset int) Value {
 	return vm.vstack[len(vm.vstack)-1-offset]
 }
 
+func (vm *VM) sizeVstack() int {
+	return len(vm.vstack)
+}
+
 func (vm *VM) resetStack() {
 	vm.vstack = nil
 }
@@ -50,6 +54,9 @@ func (vm *VM) RuntimeError(format string, args ...interface{}) {
 
 func runVM(vm *VM) bool {
 	for {
+		if vm.ip >= len(vm.chunk.bcodes) {
+			break
+		}
 		fmt.Print("          ")
 		for _, v := range vm.vstack {
 			fmt.Print("[ ")
@@ -146,10 +153,12 @@ func runVM(vm *VM) bool {
 				return false
 			}
 		case OP_RETURN:
-			fmt.Printf("%s\n", vm.popVstack().String())
 			return true
+		case OP_PRINT:
+			fmt.Printf("%s\n", vm.popVstack().String())
 		}
 	}
+	return true
 }
 
 func Interprete(chunk *Chunk) {
