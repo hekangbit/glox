@@ -249,8 +249,36 @@ func (parser *Parser) synchronize() {
 	}
 }
 
+func (parser *Parser) identifierConstant(token *Token) byte {
+	return parser.makeConstant(NewString(token.lexeme))
+}
+
+func (parser *Parser) parseVariable(error_msg string) byte {
+	parser.consume(TOKEN_IDENTIFIER, error_msg)
+	return parser.identifierConstant(&parser.previous)
+}
+
+func (parser *Parser) defineVariable(global byte) {
+	parser.emitBytes(OP_DEFINE_GLOBAL, global)
+}
+
+func (parser *Parser) varDeclaration() {
+	var global byte = parser.parseVariable("Expect variable name.")
+	if parser.match(TOKEN_EQUAL) {
+		parser.expression()
+	} else {
+		parser.emitByte(OP_NIL)
+	}
+	parser.consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.")
+	parser.defineVariable(global)
+}
+
 func (parser *Parser) declaration() {
-	parser.statement()
+	if parser.match(TOKEN_VAR) {
+		parser.varDeclaration()
+	} else {
+		parser.statement()
+	}
 	if parser.panicMode {
 		parser.synchronize()
 	}

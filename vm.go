@@ -6,9 +6,10 @@ import (
 )
 
 type VM struct {
-	chunk  *Chunk
-	ip     int
-	vstack []Value
+	chunk   *Chunk
+	ip      int
+	vstack  []Value
+	globals map[string]Value
 }
 
 func isfalsey(value Value) bool {
@@ -20,6 +21,10 @@ func isfalsey(value Value) bool {
 		return !v
 	}
 	return false
+}
+
+func tableSet(table map[string]Value, name string, value Value) {
+	table[name] = value
 }
 
 func (vm *VM) pushVstack(value Value) {
@@ -158,13 +163,23 @@ func runVM(vm *VM) bool {
 			fmt.Printf("%s\n", vm.popVstack().String())
 		case OP_POP:
 			vm.popVstack()
+		case OP_DEFINE_GLOBAL:
+			pos := vm.chunk.bcodes[vm.ip]
+			vm.ip++
+			name, ok := vm.chunk.constants[pos].GetString()
+			if !ok {
+				vm.RuntimeError("Indentifier is invalid.")
+				return false
+			}
+			tableSet(vm.globals, name, vm.peekVstack(0))
+			vm.popVstack()
 		}
 	}
 	return true
 }
 
 func Interprete(chunk *Chunk) {
-	vm := VM{chunk: chunk, ip: 0, vstack: make([]Value, 0)}
+	vm := VM{chunk: chunk, ip: 0, vstack: make([]Value, 0), globals: make(map[string]Value)}
 	fmt.Printf("-- VM Runtime start\n")
 	ok := runVM(&vm)
 	fmt.Printf("-- VM Runtime result: %v\n", ok)
