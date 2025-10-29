@@ -94,13 +94,13 @@ func runVM(vm *VM) bool {
 			tmp, _ := value.GetFloat()
 			vm.pushVstack(NewFloat(-tmp))
 		case OP_EQUAL:
-			a := vm.popVstack()
-			b := vm.popVstack()
-			vm.pushVstack(NewBool(ValueEqual(a, b)))
+			right := vm.popVstack()
+			left := vm.popVstack()
+			vm.pushVstack(NewBool(ValueEqual(left, right)))
 		case OP_GREATER:
 			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
-				left, _ := vm.popVstack().GetFloat()
 				right, _ := vm.popVstack().GetFloat()
+				left, _ := vm.popVstack().GetFloat()
 				vm.pushVstack(NewBool(left > right))
 			} else {
 				vm.RuntimeError("Operand must be number for > op.")
@@ -108,8 +108,8 @@ func runVM(vm *VM) bool {
 			}
 		case OP_LESS:
 			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
-				left, _ := vm.popVstack().GetFloat()
 				right, _ := vm.popVstack().GetFloat()
+				left, _ := vm.popVstack().GetFloat()
 				vm.pushVstack(NewBool(left < right))
 			} else {
 				vm.RuntimeError("Operand must be number for > op.")
@@ -117,12 +117,12 @@ func runVM(vm *VM) bool {
 			}
 		case OP_ADD:
 			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
-				left, _ := vm.popVstack().GetFloat()
 				right, _ := vm.popVstack().GetFloat()
+				left, _ := vm.popVstack().GetFloat()
 				vm.pushVstack(NewFloat(left + right))
 			} else if vm.peekVstack(0).IsString() && vm.peekVstack(1).IsString() {
-				left, _ := vm.popVstack().GetString()
 				right, _ := vm.popVstack().GetString()
+				left, _ := vm.popVstack().GetString()
 				vm.pushVstack(NewString(left + right))
 			} else {
 				vm.RuntimeError("Operand must be number or string for add op.")
@@ -130,8 +130,8 @@ func runVM(vm *VM) bool {
 			}
 		case OP_SUBTRACT:
 			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
-				left, _ := vm.popVstack().GetFloat()
 				right, _ := vm.popVstack().GetFloat()
+				left, _ := vm.popVstack().GetFloat()
 				vm.pushVstack(NewFloat(left - right))
 			} else {
 				vm.RuntimeError("Operand must be number for sub op.")
@@ -139,8 +139,8 @@ func runVM(vm *VM) bool {
 			}
 		case OP_MULTIPLY:
 			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
-				left, _ := vm.popVstack().GetFloat()
 				right, _ := vm.popVstack().GetFloat()
+				left, _ := vm.popVstack().GetFloat()
 				vm.pushVstack(NewFloat(left * right))
 			} else {
 				vm.RuntimeError("Operand must be number for multiply op.")
@@ -148,8 +148,8 @@ func runVM(vm *VM) bool {
 			}
 		case OP_DIVIDE:
 			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
-				left, _ := vm.popVstack().GetFloat()
 				right, _ := vm.popVstack().GetFloat()
+				left, _ := vm.popVstack().GetFloat()
 				vm.pushVstack(NewFloat(left / right))
 			} else {
 				vm.RuntimeError("Operand must be number for divide op.")
