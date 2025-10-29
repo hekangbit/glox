@@ -188,7 +188,12 @@ func (parser *Parser) stringRule() {
 
 func (parser *Parser) namedVariable(token *Token) {
 	arg := parser.identifierConstant(token)
-	parser.emitBytes(OP_GET_GLOBAL, arg)
+	if parser.match(TOKEN_EQUAL) {
+		parser.expression()
+		parser.emitBytes(OP_SET_GLOBAL, arg)
+	} else {
+		parser.emitBytes(OP_GET_GLOBAL, arg)
+	}
 }
 
 func (parser *Parser) variable() {

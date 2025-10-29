@@ -23,13 +23,19 @@ func isfalsey(value Value) bool {
 	return false
 }
 
-func tableSet(table map[string]Value, name string, value Value) {
+func tableSet(table map[string]Value, name string, value Value) bool {
+	_, ok := table[name]
 	table[name] = value
+	return !ok
 }
 
 func tableGet(table map[string]Value, name string) (Value, bool) {
 	value, ok := table[name]
 	return value, ok
+}
+
+func tableDelete(table map[string]Value, name string) {
+	delete(table, name)
 }
 
 func (vm *VM) pushVstack(value Value) {
@@ -177,6 +183,16 @@ func runVM(vm *VM) bool {
 				return false
 			}
 			vm.pushVstack(value)
+		case OP_SET_GLOBAL:
+			pos := vm.chunk.bcodes[vm.ip]
+			vm.ip++
+			name, _ := vm.chunk.constants[pos].GetString()
+			isNewKey := tableSet(vm.globals, name, vm.peekVstack(0))
+			if isNewKey {
+				tableDelete(vm.globals, name)
+				vm.RuntimeError("Undefined variable '%s'.", name)
+				return false
+			}
 		}
 	}
 	return true
