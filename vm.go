@@ -27,6 +27,11 @@ func tableSet(table map[string]Value, name string, value Value) {
 	table[name] = value
 }
 
+func tableGet(table map[string]Value, name string) (Value, bool) {
+	value, ok := table[name]
+	return value, ok
+}
+
 func (vm *VM) pushVstack(value Value) {
 	vm.vstack = append(vm.vstack, value)
 }
@@ -166,13 +171,19 @@ func runVM(vm *VM) bool {
 		case OP_DEFINE_GLOBAL:
 			pos := vm.chunk.bcodes[vm.ip]
 			vm.ip++
-			name, ok := vm.chunk.constants[pos].GetString()
-			if !ok {
-				vm.RuntimeError("Indentifier is invalid.")
-				return false
-			}
+			name, _ := vm.chunk.constants[pos].GetString()
 			tableSet(vm.globals, name, vm.peekVstack(0))
 			vm.popVstack()
+		case OP_GET_GLOBAL:
+			pos := vm.chunk.bcodes[vm.ip]
+			vm.ip++
+			name, _ := vm.chunk.constants[pos].GetString()
+			value, ok := tableGet(vm.globals, name)
+			if !ok {
+				vm.RuntimeError("Undefined variable '%s'.", name)
+				return false
+			}
+			vm.pushVstack(value)
 		}
 	}
 	return true

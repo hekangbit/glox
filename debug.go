@@ -53,6 +53,8 @@ func DisassembleInstruction(chunk *Chunk, offset int) int {
 		return SimpleInstruction("OP_POP", offset)
 	case OP_DEFINE_GLOBAL:
 		return ConstInstruction("OP_DEFINE_GLOBAL", chunk, offset)
+	case OP_GET_GLOBAL:
+		return ConstInstruction("OP_GET_GLOBAL", chunk, offset)
 	default:
 		fmt.Printf("Unknown opcode %v\n", instruction)
 		return offset + 1
