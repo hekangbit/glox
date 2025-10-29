@@ -57,7 +57,6 @@ func RunFile(path string) error {
 }
 
 func Run(source string) error {
-	CompilerInit()
 	if DebugFlag {
 		DumpTokens(source)
 	}

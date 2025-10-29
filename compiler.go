@@ -39,6 +39,10 @@ type Parser struct {
 	chunk     *Chunk
 }
 
+func getRule(token_type byte) ParseRule {
+	return rules[token_type]
+}
+
 func (parser *Parser) makeConstant(value Value) byte {
 	offset := AddConstant(parser.chunk, value)
 	if offset > 255 {
@@ -110,8 +114,38 @@ func (parser *Parser) consume(token_type byte, message string) {
 	parser.errorAtCurrent(message)
 }
 
-func getRule(token_type byte) ParseRule {
-	return rules[token_type]
+func (parser *Parser) check(token_type byte) bool {
+	return parser.current.token_type == token_type
+}
+
+func (parser *Parser) match(token_type byte) bool {
+	if !parser.check(token_type) {
+		return false
+	}
+	parser.advance()
+	return true
+}
+
+func (parser *Parser) parsePrecedence(precedence byte) {
+	parser.advance()
+	prefix := getRule(parser.previous.token_type).prefix
+	if prefix == nil {
+		parser.errorAtPrevious("Expect expression.")
+		return
+	}
+
+	canAssign := precedence <= PREC_ASSIGNMENT
+	prefix(parser, canAssign)
+
+	for precedence <= getRule(parser.current.token_type).precedence {
+		parser.advance()
+		infix := getRule(parser.previous.token_type).infix
+		infix(parser, canAssign)
+	}
+
+	if canAssign && parser.match(TOKEN_EQUAL) {
+		parser.errorAtPrevious("Invalid assignment target.")
+	}
 }
 
 func (parser *Parser) expression() {
@@ -200,40 +234,6 @@ func (parser *Parser) variable(canAssign bool) {
 	parser.namedVariable(&parser.previous, canAssign)
 }
 
-func (parser *Parser) parsePrecedence(precedence byte) {
-	parser.advance()
-	prefix := getRule(parser.previous.token_type).prefix
-	if prefix == nil {
-		parser.errorAtPrevious("Expect expression.")
-		return
-	}
-
-	canAssign := precedence <= PREC_ASSIGNMENT
-	prefix(parser, canAssign)
-
-	for precedence <= getRule(parser.current.token_type).precedence {
-		parser.advance()
-		infix := getRule(parser.previous.token_type).infix
-		infix(parser, canAssign)
-	}
-
-	if canAssign && parser.match(TOKEN_EQUAL) {
-		parser.errorAtPrevious("Invalid assignment target.")
-	}
-}
-
-func (parser *Parser) check(token_type byte) bool {
-	return parser.current.token_type == token_type
-}
-
-func (parser *Parser) match(token_type byte) bool {
-	if !parser.check(token_type) {
-		return false
-	}
-	parser.advance()
-	return true
-}
-
 func (parser *Parser) printStatement() {
 	parser.expression()
 	parser.consume(TOKEN_SEMICOLON, "Expect ';' after value.")
@@ -251,20 +251,6 @@ func (parser *Parser) statement() {
 		parser.printStatement()
 	} else {
 		parser.expressionStatement()
-	}
-}
-
-func (parser *Parser) synchronize() {
-	parser.panicMode = false
-	for parser.current.token_type != TOKEN_EOF {
-		if parser.previous.token_type == TOKEN_SEMICOLON {
-			return
-		}
-		switch parser.current.token_type {
-		case TOKEN_CLASS, TOKEN_FUN, TOKEN_VAR, TOKEN_FOR, TOKEN_WHILE, TOKEN_IF, TOKEN_PRINT, TOKEN_RETURN:
-			return
-		}
-		parser.advance()
 	}
 }
 
@@ -290,6 +276,20 @@ func (parser *Parser) varDeclaration() {
 	}
 	parser.consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.")
 	parser.defineVariable(global)
+}
+
+func (parser *Parser) synchronize() {
+	parser.panicMode = false
+	for parser.current.token_type != TOKEN_EOF {
+		if parser.previous.token_type == TOKEN_SEMICOLON {
+			return
+		}
+		switch parser.current.token_type {
+		case TOKEN_CLASS, TOKEN_FUN, TOKEN_VAR, TOKEN_FOR, TOKEN_WHILE, TOKEN_IF, TOKEN_PRINT, TOKEN_RETURN:
+			return
+		}
+		parser.advance()
+	}
 }
 
 func (parser *Parser) declaration() {
@@ -353,6 +353,7 @@ func Compile(source string) (bool, *Chunk) {
 	parser := Parser{scanner: Scanner{1, 0, 0, source}, chunk: &chunk}
 	parser.advance()
 
+	CompilerInit()
 	for !parser.match(TOKEN_EOF) {
 		parser.declaration()
 	}
