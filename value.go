@@ -162,3 +162,14 @@ func (v Value) String() string {
 		return "unknown"
 	}
 }
+
+func help() {
+	// var v Value
+	// v.SetInt(42)
+	// fmt.Printf("Value: %s, Type: %d\n", v.String(), v.Type())
+	// v.SetFloat(3.14)
+	// fmt.Printf("Value: %s, Type: %d\n", v.String(), v.Type())
+	// if f, ok := v.GetFloat(); ok {
+	// 	fmt.Printf("Float value: %f\n", f)
+	// }
+}

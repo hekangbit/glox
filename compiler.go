@@ -348,7 +348,6 @@ func Compile(source string) (bool, *Chunk) {
 	}
 
 	if !parser.hadError {
-		fmt.Println("Compile success!")
 		DisassembleChunk(&chunk, "test chunk")
 	}
 

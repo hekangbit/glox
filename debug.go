@@ -2,6 +2,8 @@ package main
 
 import "fmt"
 
+var DebugFlag bool = false
+
 func SimpleInstruction(name string, offset int) int {
 	fmt.Printf("%s\n", name)
 	return offset + 1
@@ -62,9 +64,25 @@ func DisassembleInstruction(chunk *Chunk, offset int) int {
 }
 
 func DisassembleChunk(chunk *Chunk, name string) {
+	if !DebugFlag {
+		return
+	}
 	fmt.Printf("== %s ==\n", name)
-
 	for offset := 0; offset < len(chunk.bcodes); {
 		offset = DisassembleInstruction(chunk, offset)
 	}
+}
+
+func DebugVM(vm *VM) {
+	if !DebugFlag {
+		return
+	}
+	fmt.Print("          ")
+	for _, v := range vm.vstack {
+		fmt.Print("[ ")
+		fmt.Printf("%s", v.String())
+		fmt.Print(" ]")
+	}
+	fmt.Print("\n")
+	DisassembleInstruction(vm.chunk, vm.ip)
 }

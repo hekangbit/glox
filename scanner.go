@@ -162,9 +162,6 @@ func (scanner *Scanner) stringLiteral() Token {
 	}
 
 	scanner.advance()
-
-	// str := scanner.source[scanner.start+1 : scanner.current-1]
-	// return Token{TOKEN_STRING, str, scanner.line}
 	return scanner.MakeToken(TOKEN_STRING)
 }
 

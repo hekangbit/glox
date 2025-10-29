@@ -67,14 +67,7 @@ func runVM(vm *VM) bool {
 		if vm.ip >= len(vm.chunk.bcodes) {
 			break
 		}
-		fmt.Print("          ")
-		for _, v := range vm.vstack {
-			fmt.Print("[ ")
-			fmt.Printf("%s", v.String())
-			fmt.Print(" ]")
-		}
-		fmt.Print("\n")
-		DisassembleInstruction(vm.chunk, vm.ip)
+		DebugVM(vm)
 
 		instruction := vm.chunk.bcodes[vm.ip]
 		vm.ip++
@@ -191,7 +184,9 @@ func runVM(vm *VM) bool {
 
 func Interprete(chunk *Chunk) {
 	vm := VM{chunk: chunk, ip: 0, vstack: make([]Value, 0), globals: make(map[string]Value)}
-	fmt.Printf("-- VM Runtime start\n")
+	fmt.Printf("-- GLOX VM --\n")
 	ok := runVM(&vm)
-	fmt.Printf("-- VM Runtime result: %v\n", ok)
+	if !ok {
+		fmt.Printf("GLOX VM runtime error\n")
+	}
 }

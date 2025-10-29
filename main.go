@@ -12,21 +12,20 @@ func Init() {
 }
 
 func main() {
-	// var v Value
-	// v.SetInt(42)
-	// fmt.Printf("Value: %s, Type: %d\n", v.String(), v.Type())
-	// v.SetFloat(3.14)
-	// fmt.Printf("Value: %s, Type: %d\n", v.String(), v.Type())
-	// if f, ok := v.GetFloat(); ok {
-	// 	fmt.Printf("Float value: %f\n", f)
-	// }
-
 	Init()
 	switch len(os.Args) {
 	case 1:
 		Repl()
 	case 2:
 		if err := RunFile(os.Args[1]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(64)
+		}
+	case 3:
+		if os.Args[1] == "-D" {
+			DebugFlag = true
+		}
+		if err := RunFile(os.Args[2]); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(64)
 		}
@@ -59,10 +58,12 @@ func RunFile(path string) error {
 
 func Run(source string) error {
 	CompilerInit()
-	DumpTokens(source)
+	if DebugFlag {
+		DumpTokens(source)
+	}
 	ok, chunk := Compile(source)
 	if !ok {
-		return errors.New("Compile fail")
+		return errors.New("glox compile fail")
 	}
 	Interprete(chunk)
 	return nil
