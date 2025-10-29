@@ -20,7 +20,7 @@ const (
 	PREC_PRIMARY
 )
 
-type ParseFn func(*Parser)
+type ParseFn func(*Parser, bool)
 
 type ParseRule struct {
 	prefix     ParseFn
@@ -118,7 +118,7 @@ func (parser *Parser) expression() {
 	parser.parsePrecedence(PREC_ASSIGNMENT)
 }
 
-func (parser *Parser) number() {
+func (parser *Parser) number(canAssign bool) {
 	value, err := strconv.ParseFloat(parser.previous.lexeme, 64)
 	if err != nil {
 		parser.errorAtPrevious("Failed convert string to number.")
@@ -127,12 +127,12 @@ func (parser *Parser) number() {
 	parser.emitConstant(NewFloat(value))
 }
 
-func (parser *Parser) grouping() {
+func (parser *Parser) grouping(canAssign bool) {
 	parser.expression()
 	parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.")
 }
 
-func (parser *Parser) unary() {
+func (parser *Parser) unary(canAssign bool) {
 	operator_type := parser.previous.token_type
 	parser.parsePrecedence(PREC_UNARY)
 	switch operator_type {
@@ -143,7 +143,7 @@ func (parser *Parser) unary() {
 	}
 }
 
-func (parser *Parser) binary() {
+func (parser *Parser) binary(canAssign bool) {
 	operator_type := parser.previous.token_type
 	rule := getRule(operator_type)
 	parser.parsePrecedence(rule.precedence + 1)
@@ -171,7 +171,7 @@ func (parser *Parser) binary() {
 	}
 }
 
-func (parser *Parser) literal() {
+func (parser *Parser) boolLiteral(canAssign bool) {
 	switch parser.previous.token_type {
 	case TOKEN_FALSE:
 		parser.emitByte(OP_FALSE)
@@ -182,13 +182,13 @@ func (parser *Parser) literal() {
 	}
 }
 
-func (parser *Parser) stringRule() {
+func (parser *Parser) stringLiteral(canAssign bool) {
 	parser.emitConstant(NewString(parser.previous.lexeme[1 : len(parser.previous.lexeme)-1]))
 }
 
-func (parser *Parser) namedVariable(token *Token) {
+func (parser *Parser) namedVariable(token *Token, canAssign bool) {
 	arg := parser.identifierConstant(token)
-	if parser.match(TOKEN_EQUAL) {
+	if canAssign && parser.match(TOKEN_EQUAL) {
 		parser.expression()
 		parser.emitBytes(OP_SET_GLOBAL, arg)
 	} else {
@@ -196,8 +196,8 @@ func (parser *Parser) namedVariable(token *Token) {
 	}
 }
 
-func (parser *Parser) variable() {
-	parser.namedVariable(&parser.previous)
+func (parser *Parser) variable(canAssign bool) {
+	parser.namedVariable(&parser.previous, canAssign)
 }
 
 func (parser *Parser) parsePrecedence(precedence byte) {
@@ -208,12 +208,17 @@ func (parser *Parser) parsePrecedence(precedence byte) {
 		return
 	}
 
-	prefix(parser)
+	canAssign := precedence <= PREC_ASSIGNMENT
+	prefix(parser, canAssign)
 
 	for precedence <= getRule(parser.current.token_type).precedence {
 		parser.advance()
 		infix := getRule(parser.previous.token_type).infix
-		infix(parser)
+		infix(parser, canAssign)
+	}
+
+	if canAssign && parser.match(TOKEN_EQUAL) {
+		parser.errorAtPrevious("Invalid assignment target.")
 	}
 }
 
@@ -320,22 +325,22 @@ func CompilerInit() {
 		TOKEN_LESS:          {nil, (*Parser).binary, PREC_COMPARISON},
 		TOKEN_LESS_EQUAL:    {nil, (*Parser).binary, PREC_COMPARISON},
 		TOKEN_IDENTIFIER:    {(*Parser).variable, nil, PREC_NONE},
-		TOKEN_STRING:        {(*Parser).stringRule, nil, PREC_NONE},
+		TOKEN_STRING:        {(*Parser).stringLiteral, nil, PREC_NONE},
 		TOKEN_NUMBER:        {(*Parser).number, nil, PREC_NONE},
 		TOKEN_AND:           {nil, nil, PREC_NONE},
 		TOKEN_CLASS:         {nil, nil, PREC_NONE},
 		TOKEN_ELSE:          {nil, nil, PREC_NONE},
-		TOKEN_FALSE:         {(*Parser).literal, nil, PREC_NONE},
+		TOKEN_FALSE:         {(*Parser).boolLiteral, nil, PREC_NONE},
 		TOKEN_FOR:           {nil, nil, PREC_NONE},
 		TOKEN_FUN:           {nil, nil, PREC_NONE},
 		TOKEN_IF:            {nil, nil, PREC_NONE},
-		TOKEN_NIL:           {(*Parser).literal, nil, PREC_NONE},
+		TOKEN_NIL:           {(*Parser).boolLiteral, nil, PREC_NONE},
 		TOKEN_OR:            {nil, nil, PREC_NONE},
 		TOKEN_PRINT:         {nil, nil, PREC_NONE},
 		TOKEN_RETURN:        {nil, nil, PREC_NONE},
 		TOKEN_SUPER:         {nil, nil, PREC_NONE},
 		TOKEN_THIS:          {nil, nil, PREC_NONE},
-		TOKEN_TRUE:          {(*Parser).literal, nil, PREC_NONE},
+		TOKEN_TRUE:          {(*Parser).boolLiteral, nil, PREC_NONE},
 		TOKEN_VAR:           {nil, nil, PREC_NONE},
 		TOKEN_WHILE:         {nil, nil, PREC_NONE},
 		TOKEN_ERROR:         {nil, nil, PREC_NONE},
