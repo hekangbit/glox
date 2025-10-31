@@ -16,6 +16,12 @@ func ConstInstruction(name string, chunk *Chunk, offset int) int {
 	return offset + 2
 }
 
+func ByteInstruction(name string, chunk *Chunk, offset int) int {
+	slot_index := chunk.bcodes[offset+1]
+	fmt.Printf("%-16s %4d\n", name, slot_index)
+	return offset + 2
+}
+
 func DisassembleInstruction(chunk *Chunk, offset int) int {
 	fmt.Printf("%04d ", offset)
 
@@ -59,6 +65,10 @@ func DisassembleInstruction(chunk *Chunk, offset int) int {
 		return ConstInstruction("OP_GET_GLOBAL", chunk, offset)
 	case OP_SET_GLOBAL:
 		return ConstInstruction("OP_SET_GLOBAL", chunk, offset)
+	case OP_GET_LOCAL:
+		return ByteInstruction("OP_GET_LOCAL", chunk, offset)
+	case OP_SET_LOCAL:
+		return ByteInstruction("OP_SET_LOCAL", chunk, offset)
 	default:
 		fmt.Printf("Unknown opcode %v\n", instruction)
 		return offset + 1

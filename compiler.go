@@ -20,6 +20,10 @@ const (
 	PREC_PRIMARY
 )
 
+const (
+	MAX_NUM_OF_LOCAL_VARS int = iota + 256
+)
+
 type ParseFn func(*Parser, bool)
 
 type ParseRule struct {
@@ -37,6 +41,22 @@ type Parser struct {
 	hadError  bool
 	panicMode bool
 	chunk     *Chunk
+	compiler  Compiler
+}
+
+type Local struct {
+	name  Token
+	depth int
+}
+
+type Compiler struct {
+	locals     [MAX_NUM_OF_LOCAL_VARS]Local // all locals that are in scope during each point in the compilation process
+	scopeDepth int                          // the number of blocks surrounding the current bit of code we’re compiling
+	localCount int
+}
+
+func identifiersEqual(a *Token, b *Token) bool {
+	return a.lexeme == b.lexeme
 }
 
 func getRule(token_type byte) ParseRule {
@@ -220,13 +240,40 @@ func (parser *Parser) stringLiteral(canAssign bool) {
 	parser.emitConstant(NewString(parser.previous.lexeme[1 : len(parser.previous.lexeme)-1]))
 }
 
-func (parser *Parser) namedVariable(token *Token, canAssign bool) {
-	arg := parser.identifierConstant(token)
+func (parser *Parser) resolveLocal(name *Token) (byte, bool) {
+	localNum := parser.compiler.localCount
+	for i := localNum - 1; i >= 0; i-- {
+		local := &parser.compiler.locals[i]
+		if identifiersEqual(name, &local.name) {
+			if local.depth == -1 {
+				parser.errorAtPrevious("Can't read local variable in its own initializer.")
+			}
+			return byte(i), true
+		}
+	}
+	return 0, false
+}
+
+func (parser *Parser) namedVariable(name *Token, canAssign bool) {
+	var getOP, setOP byte
+	var arg byte
+
+	arg, isLocal := parser.resolveLocal(name)
+
+	if isLocal {
+		getOP = OP_GET_LOCAL
+		setOP = OP_SET_LOCAL
+	} else {
+		arg = parser.identifierConstant(name)
+		getOP = OP_GET_GLOBAL
+		setOP = OP_SET_GLOBAL
+	}
+
 	if canAssign && parser.match(TOKEN_EQUAL) {
 		parser.expression()
-		parser.emitBytes(OP_SET_GLOBAL, arg)
+		parser.emitBytes(setOP, arg)
 	} else {
-		parser.emitBytes(OP_GET_GLOBAL, arg)
+		parser.emitBytes(getOP, arg)
 	}
 }
 
@@ -246,9 +293,32 @@ func (parser *Parser) expressionStatement() {
 	parser.emitByte(OP_POP)
 }
 
+func (parser *Parser) block() {
+	for !parser.check(TOKEN_RIGHT_BRACE) && !parser.check(TOKEN_EOF) {
+		parser.declaration()
+	}
+	parser.consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.")
+}
+
+func (parser *Parser) beginScope() {
+	parser.compiler.scopeDepth++
+}
+
+func (parser *Parser) endScope() {
+	parser.compiler.scopeDepth--
+	for parser.compiler.localCount > 0 && parser.compiler.locals[parser.compiler.localCount-1].depth > parser.compiler.scopeDepth {
+		parser.emitByte(OP_POP)
+		parser.compiler.localCount--
+	}
+}
+
 func (parser *Parser) statement() {
 	if parser.match(TOKEN_PRINT) {
 		parser.printStatement()
+	} else if parser.match(TOKEN_LEFT_BRACE) {
+		parser.beginScope()
+		parser.block()
+		parser.endScope()
 	} else {
 		parser.expressionStatement()
 	}
@@ -258,12 +328,55 @@ func (parser *Parser) identifierConstant(token *Token) byte {
 	return parser.makeConstant(NewString(token.lexeme))
 }
 
+func (parser *Parser) addLocal(name *Token) {
+	if parser.compiler.localCount >= MAX_NUM_OF_LOCAL_VARS {
+		parser.errorAtPrevious("Too many local variables in function.")
+		return
+	}
+	local := &parser.compiler.locals[parser.compiler.localCount]
+	parser.compiler.localCount++
+	local.name = *name
+	local.depth = -1
+}
+
+func (parser *Parser) declareVariable() {
+	if parser.compiler.scopeDepth == 0 {
+		return
+	}
+
+	// check local var duplicate declare
+	for i := parser.compiler.localCount - 1; i >= 0; i++ {
+		local := &parser.compiler.locals[i]
+		if local.depth != -1 && local.depth < parser.compiler.scopeDepth {
+			break
+		}
+		if identifiersEqual(&local.name, &parser.previous) {
+			parser.errorAtPrevious("Already a variable with this name in this scope.")
+		}
+	}
+
+	parser.addLocal(&parser.previous)
+}
+
 func (parser *Parser) parseVariable(error_msg string) byte {
 	parser.consume(TOKEN_IDENTIFIER, error_msg)
+
+	parser.declareVariable()
+	if parser.compiler.scopeDepth > 0 {
+		return 0
+	}
 	return parser.identifierConstant(&parser.previous)
 }
 
+func (parser *Parser) markInitialized() {
+	parser.compiler.locals[parser.compiler.localCount-1].depth = parser.compiler.scopeDepth
+}
+
 func (parser *Parser) defineVariable(global byte) {
+	if parser.compiler.scopeDepth > 0 {
+		parser.markInitialized()
+		return
+	}
 	parser.emitBytes(OP_DEFINE_GLOBAL, global)
 }
 
@@ -303,7 +416,7 @@ func (parser *Parser) declaration() {
 	}
 }
 
-func CompilerInit() {
+func initParseRule() {
 	rules = map[byte]ParseRule{
 		TOKEN_LEFT_PAREN:    {(*Parser).grouping, nil, PREC_NONE},
 		TOKEN_RIGHT_PAREN:   {nil, nil, PREC_NONE},
@@ -353,7 +466,7 @@ func Compile(source string) (bool, *Chunk) {
 	parser := Parser{scanner: Scanner{1, 0, 0, source}, chunk: &chunk}
 	parser.advance()
 
-	CompilerInit()
+	initParseRule()
 	for !parser.match(TOKEN_EOF) {
 		parser.declaration()
 	}

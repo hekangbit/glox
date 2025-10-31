@@ -52,6 +52,14 @@ func (vm *VM) peekVstack(offset int) Value {
 	return vm.vstack[len(vm.vstack)-1-offset]
 }
 
+func (vm *VM) getVStack(slot byte) Value {
+	return vm.vstack[slot]
+}
+
+func (vm *VM) setVStack(slot byte, value Value) {
+	vm.vstack[slot] = value
+}
+
 func (vm *VM) sizeVstack() int {
 	return len(vm.vstack)
 }
@@ -193,6 +201,14 @@ func runVM(vm *VM) bool {
 				vm.RuntimeError("Undefined variable '%s'.", name)
 				return false
 			}
+		case OP_GET_LOCAL:
+			slot := vm.chunk.bcodes[vm.ip]
+			vm.ip++
+			vm.pushVstack(vm.getVStack(slot))
+		case OP_SET_LOCAL:
+			slot := vm.chunk.bcodes[vm.ip]
+			vm.ip++
+			vm.setVStack(slot, vm.peekVstack(0))
 		}
 	}
 	return true
