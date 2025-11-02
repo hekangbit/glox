@@ -226,6 +226,22 @@ func (parser *Parser) binary(canAssign bool) {
 	}
 }
 
+func (parser *Parser) andRule(canAssign bool) {
+	endJump := parser.emitJump(OP_JUMP_IF_FALSE)
+	parser.emitByte(OP_POP)
+	parser.parsePrecedence(PREC_AND)
+	parser.patchJump(endJump)
+}
+
+func (parser *Parser) orRule(canAssign bool) {
+	elseJump := parser.emitJump(OP_JUMP_IF_FALSE)
+	endJump := parser.emitJump(OP_JUMP)
+	parser.patchJump(elseJump)
+	parser.emitByte(OP_POP)
+	parser.parsePrecedence(PREC_OR)
+	parser.patchJump(endJump)
+}
+
 func (parser *Parser) boolLiteral(canAssign bool) {
 	switch parser.previous.token_type {
 	case TOKEN_FALSE:
@@ -487,7 +503,7 @@ func initParseRule() {
 		TOKEN_IDENTIFIER:    {(*Parser).variable, nil, PREC_NONE},
 		TOKEN_STRING:        {(*Parser).stringLiteral, nil, PREC_NONE},
 		TOKEN_NUMBER:        {(*Parser).number, nil, PREC_NONE},
-		TOKEN_AND:           {nil, nil, PREC_NONE},
+		TOKEN_AND:           {nil, (*Parser).andRule, PREC_AND},
 		TOKEN_CLASS:         {nil, nil, PREC_NONE},
 		TOKEN_ELSE:          {nil, nil, PREC_NONE},
 		TOKEN_FALSE:         {(*Parser).boolLiteral, nil, PREC_NONE},
@@ -495,7 +511,7 @@ func initParseRule() {
 		TOKEN_FUN:           {nil, nil, PREC_NONE},
 		TOKEN_IF:            {nil, nil, PREC_NONE},
 		TOKEN_NIL:           {(*Parser).boolLiteral, nil, PREC_NONE},
-		TOKEN_OR:            {nil, nil, PREC_NONE},
+		TOKEN_OR:            {nil, (*Parser).orRule, PREC_OR},
 		TOKEN_PRINT:         {nil, nil, PREC_NONE},
 		TOKEN_RETURN:        {nil, nil, PREC_NONE},
 		TOKEN_SUPER:         {nil, nil, PREC_NONE},
