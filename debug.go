@@ -22,6 +22,12 @@ func ByteInstruction(name string, chunk *Chunk, offset int) int {
 	return offset + 2
 }
 
+func JumpInstruction(name string, sign int, chunk *Chunk, offset int) int {
+	var jump uint16 = uint16(chunk.bcodes[offset+1]<<8 + chunk.bcodes[offset+2])
+	fmt.Printf("%-16s %4d -> %d\n", name, offset, offset+3+sign*int(jump))
+	return offset + 3
+}
+
 func DisassembleInstruction(chunk *Chunk, offset int) int {
 	fmt.Printf("%04d ", offset)
 
@@ -69,6 +75,10 @@ func DisassembleInstruction(chunk *Chunk, offset int) int {
 		return ByteInstruction("OP_GET_LOCAL", chunk, offset)
 	case OP_SET_LOCAL:
 		return ByteInstruction("OP_SET_LOCAL", chunk, offset)
+	case OP_JUMP:
+		return JumpInstruction("OP_JUMP", 1, chunk, offset)
+	case OP_JUMP_IF_FALSE:
+		return JumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset)
 	default:
 		fmt.Printf("Unknown opcode %v\n", instruction)
 		return offset + 1

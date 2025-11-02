@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 )
@@ -312,6 +313,50 @@ func (parser *Parser) endScope() {
 	}
 }
 
+func (parser *Parser) emitJump(op byte) int {
+	parser.emitByte(op)
+	parser.emitByte(0xFF)
+	parser.emitByte(0xFF)
+	return len(parser.chunk.bcodes) - 2
+}
+
+func (parser *Parser) patchJump(offset int) {
+	jump := len(parser.chunk.bcodes) - offset - 2
+	if jump > math.MaxUint16 {
+		parser.errorAtPrevious("Too much code to jump over.")
+	}
+	// Big-endian
+	parser.chunk.bcodes[offset] = byte((jump >> 8) & 0xFF)
+	parser.chunk.bcodes[offset+1] = byte(jump & 0xFF)
+}
+
+/*
+OP_JUMP_IF_FALSE
+U16
+OP_POP
+statements(then)
+OP_JUMP
+U16
+OP_POP
+statements(else)
+statements(after if statement)
+*/
+func (parser *Parser) ifStatement() {
+	parser.consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.")
+	parser.expression()
+	parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.")
+	skipThenPos := parser.emitJump(OP_JUMP_IF_FALSE)
+	parser.emitByte(OP_POP)
+	parser.statement()
+	skipElsePos := parser.emitJump(OP_JUMP)
+	parser.patchJump(skipThenPos)
+	parser.emitByte(OP_POP)
+	if parser.match(TOKEN_ELSE) {
+		parser.statement()
+	}
+	parser.patchJump(skipElsePos)
+}
+
 func (parser *Parser) statement() {
 	if parser.match(TOKEN_PRINT) {
 		parser.printStatement()
@@ -319,6 +364,8 @@ func (parser *Parser) statement() {
 		parser.beginScope()
 		parser.block()
 		parser.endScope()
+	} else if parser.match(TOKEN_IF) {
+		parser.ifStatement()
 	} else {
 		parser.expressionStatement()
 	}

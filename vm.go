@@ -68,6 +68,12 @@ func (vm *VM) resetStack() {
 	vm.vstack = nil
 }
 
+func (vm *VM) readShort() uint16 {
+	result := uint16(vm.chunk.bcodes[vm.ip]<<8 + vm.chunk.bcodes[vm.ip+1])
+	vm.ip += 2
+	return result
+}
+
 func (vm *VM) RuntimeError(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format, args...)
 	fmt.Fprintf(os.Stderr, "\n")
@@ -209,6 +215,14 @@ func runVM(vm *VM) bool {
 			slot := vm.chunk.bcodes[vm.ip]
 			vm.ip++
 			vm.setVStack(slot, vm.peekVstack(0))
+		case OP_JUMP:
+			offset := vm.readShort()
+			vm.ip += int(offset)
+		case OP_JUMP_IF_FALSE:
+			offset := vm.readShort()
+			if isfalsey(vm.peekVstack(0)) {
+				vm.ip += int(offset)
+			}
 		}
 	}
 	return true
