@@ -223,6 +223,9 @@ func runVM(vm *VM) bool {
 			if isfalsey(vm.peekVstack(0)) {
 				vm.ip += int(offset)
 			}
+		case OP_LOOP:
+			offset := vm.readShort()
+			vm.ip -= int(offset)
 		}
 	}
 	return true

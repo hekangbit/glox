@@ -361,16 +361,41 @@ func (parser *Parser) ifStatement() {
 	parser.consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.")
 	parser.expression()
 	parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.")
-	skipThenPos := parser.emitJump(OP_JUMP_IF_FALSE)
+	elseJump := parser.emitJump(OP_JUMP_IF_FALSE)
 	parser.emitByte(OP_POP)
 	parser.statement()
-	skipElsePos := parser.emitJump(OP_JUMP)
-	parser.patchJump(skipThenPos)
+	endJump := parser.emitJump(OP_JUMP)
+	parser.patchJump(elseJump)
 	parser.emitByte(OP_POP)
 	if parser.match(TOKEN_ELSE) {
 		parser.statement()
 	}
-	parser.patchJump(skipElsePos)
+	parser.patchJump(endJump)
+}
+
+func (parser *Parser) emitLoop(loopStart int) {
+	parser.emitByte(OP_LOOP)
+	offset := len(parser.chunk.bcodes) - loopStart + 2
+	if offset > math.MaxUint16 {
+		parser.errorAtPrevious("Loop body too large.")
+	}
+	parser.emitByte(byte(offset >> 8 & 0xFF))
+	parser.emitByte(byte(offset & 0xFF))
+}
+
+func (parser *Parser) whileStatement() {
+	loopStart := len(parser.chunk.bcodes)
+	parser.consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.")
+	parser.expression()
+	parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.")
+
+	exitJump := parser.emitJump(OP_JUMP_IF_FALSE)
+	parser.emitByte(OP_POP)
+	parser.statement()
+	parser.emitLoop(loopStart)
+
+	parser.patchJump(exitJump)
+	parser.emitByte(OP_POP)
 }
 
 func (parser *Parser) statement() {
@@ -382,6 +407,8 @@ func (parser *Parser) statement() {
 		parser.endScope()
 	} else if parser.match(TOKEN_IF) {
 		parser.ifStatement()
+	} else if parser.match(TOKEN_WHILE) {
+		parser.whileStatement()
 	} else {
 		parser.expressionStatement()
 	}
