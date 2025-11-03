@@ -398,6 +398,51 @@ func (parser *Parser) whileStatement() {
 	parser.emitByte(OP_POP)
 }
 
+func (parser *Parser) forStatement() {
+	parser.beginScope()
+
+	parser.consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.")
+
+	if parser.match(TOKEN_SEMICOLON) {
+		// no init
+	} else if parser.match(TOKEN_VAR) {
+		parser.varDeclaration()
+	} else {
+		parser.expressionStatement()
+	}
+
+	var loopStart int = len(parser.chunk.bcodes)
+	var exitJump int = -1
+
+	if !parser.match(TOKEN_SEMICOLON) {
+		parser.expression()
+		parser.consume(TOKEN_SEMICOLON, "Expect ';' after for loop condition.")
+		exitJump = parser.emitJump(OP_JUMP_IF_FALSE)
+		parser.emitByte(OP_POP)
+	}
+
+	if !parser.match(TOKEN_RIGHT_PAREN) {
+		bodyJump := parser.emitJump(OP_JUMP)
+		loopIncrement := len(parser.chunk.bcodes)
+		parser.expression()
+		parser.emitByte(OP_POP)
+		parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after for loop clauses.")
+		parser.emitLoop(loopStart)
+		parser.patchJump(bodyJump)
+		loopStart = loopIncrement
+	}
+
+	parser.statement()
+	parser.emitLoop(loopStart)
+
+	if exitJump != -1 {
+		parser.patchJump(exitJump)
+		parser.emitByte(OP_POP)
+	}
+
+	parser.endScope()
+}
+
 func (parser *Parser) statement() {
 	if parser.match(TOKEN_PRINT) {
 		parser.printStatement()
@@ -409,6 +454,8 @@ func (parser *Parser) statement() {
 		parser.ifStatement()
 	} else if parser.match(TOKEN_WHILE) {
 		parser.whileStatement()
+	} else if parser.match(TOKEN_FOR) {
+		parser.forStatement()
 	} else {
 		parser.expressionStatement()
 	}
