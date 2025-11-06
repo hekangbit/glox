@@ -2,174 +2,185 @@ package main
 
 import (
 	"fmt"
-)
-
-type VariantType int
-
-const (
-	TypeInt VariantType = iota
-	TypeNil
-	TypeFloat
-	TypeString
-	TypeBool
+	"reflect"
 )
 
 type Variant struct {
-	typ  VariantType
-	iVal int
-	fVal float64
-	sVal string
-	bVal bool
+	value interface{}
 }
 
 type Value Variant
 
-func ValueEqual(v1, v2 Value) bool {
-	if v1.typ != v2.typ {
+func isSameType(v1 *Value, v2 *Value) bool {
+	if v1.value == nil && v2.value == nil {
+		return true
+	}
+	if v1.value == nil || v2.value == nil {
 		return false
 	}
-	switch v1.typ {
-	case TypeNil:
-		return true
-	case TypeBool:
-		return isfalsey(v1) == isfalsey(v2)
-	case TypeInt:
-		a, _ := v1.GetInt()
-		b, _ := v2.GetInt()
-		return a == b
-	case TypeFloat:
-		a, _ := v1.GetFloat()
-		b, _ := v2.GetFloat()
-		return a == b
-	case TypeString:
-		a, _ := v1.GetString()
-		b, _ := v2.GetString()
-		return a == b
+	return reflect.TypeOf(v1.value) == reflect.TypeOf(v2.value)
+}
+
+func (v *Value) Set(value interface{}) {
+	v.value = value
+}
+
+func (v *Value) Get() interface{} {
+	return v.value
+}
+
+func (v *Value) getType() reflect.Type {
+	if v.value == nil {
+		return nil
 	}
-	return false
+	return reflect.TypeOf(v.value)
 }
 
 func NewNil() Value {
-	return Value{typ: TypeNil, iVal: 0}
+	return Value{value: nil}
 }
 
 func NewInt(v int) Value {
-	return Value{typ: TypeInt, iVal: v}
+	return Value{value: v}
 }
 
 func NewFloat(v float64) Value {
-	return Value{typ: TypeFloat, fVal: v}
+	return Value{value: v}
 }
 
 func NewString(v string) Value {
-	return Value{typ: TypeString, sVal: v}
+	return Value{value: v}
 }
 
 func NewBool(v bool) Value {
-	return Value{typ: TypeBool, bVal: v}
-}
-
-func (v Value) Type() VariantType {
-	return v.typ
+	return Value{value: v}
 }
 
 func (v Value) IsNil() bool {
-	return v.Type() == TypeNil
+	return v.value == nil
 }
 
 func (v Value) IsInt() bool {
-	return v.Type() == TypeInt
+	_, ok := v.value.(int)
+	return ok
 }
 
 func (v Value) IsFloat() bool {
-	return v.Type() == TypeFloat
+	_, ok := v.value.(float64)
+	return ok
 }
 
 func (v Value) IsString() bool {
-	return v.Type() == TypeString
+	_, ok := v.value.(string)
+	return ok
 }
 
 func (v Value) IsBool() bool {
-	return v.Type() == TypeBool
+	_, ok := v.value.(bool)
+	return ok
 }
 
 func (v Value) GetInt() (int, bool) {
-	if v.typ == TypeInt {
-		return v.iVal, true
+	result, ok := v.value.(int)
+	if ok {
+		return result, true
 	}
 	return 0, false
 }
 
 func (v Value) GetFloat() (float64, bool) {
-	if v.typ == TypeFloat {
-		return v.fVal, true
+	result, ok := v.value.(float64)
+	if ok {
+		return result, true
 	}
-	return 0, false
+	return 0.0, false
 }
 
 func (v Value) GetString() (string, bool) {
-	if v.typ == TypeString {
-		return v.sVal, true
+	result, ok := v.value.(string)
+	if ok {
+		return result, true
 	}
 	return "", false
 }
 
 func (v Value) GetBool() (bool, bool) {
-	if v.typ == TypeBool {
-		return v.bVal, true
+	result, ok := v.value.(bool)
+	if ok {
+		return result, true
 	}
 	return false, false
 }
 
 func (v *Value) SetNil() {
-	v.typ = TypeNil
-	v.iVal = 0
+	v.value = nil
 }
 
-func (v *Value) SetInt(i int) {
-	v.typ = TypeInt
-	v.iVal = i
+func (v *Value) SetInt(value int) {
+	v.value = value
 }
 
-func (v *Value) SetFloat(f float64) {
-	v.typ = TypeFloat
-	v.fVal = f
+func (v *Value) SetFloat(value float64) {
+	v.value = value
 }
 
-func (v *Value) SetString(s string) {
-	v.typ = TypeString
-	v.sVal = s
+func (v *Value) SetString(value string) {
+	v.value = value
 }
 
-func (v *Value) SetBool(b bool) {
-	v.typ = TypeBool
-	v.bVal = b
+func (v *Value) SetBool(value bool) {
+	v.value = value
+}
+
+func IsValueEqual(v1, v2 *Value) bool {
+	if !isSameType(v1, v2) {
+		return false
+	}
+
+	if v1.value == nil {
+		return true
+	}
+
+	switch v1.value.(type) {
+	case bool:
+		a, _ := v1.GetBool()
+		b, _ := v2.GetBool()
+		return a == b
+	case int:
+		a, _ := v1.GetInt()
+		b, _ := v2.GetInt()
+		return a == b
+	case float64:
+		a, _ := v1.GetFloat()
+		b, _ := v2.GetFloat()
+		return a == b
+	case string:
+		a, _ := v1.GetString()
+		b, _ := v2.GetString()
+		return a == b
+	}
+
+	return false
 }
 
 func (v Value) String() string {
-	switch v.typ {
-	case TypeNil:
+
+	switch v.value.(type) {
+	case nil:
 		return "nil"
-	case TypeInt:
-		return fmt.Sprintf("%d", v.iVal)
-	case TypeFloat:
-		return fmt.Sprintf("%f", v.fVal)
-	case TypeString:
-		return v.sVal
-	case TypeBool:
-		return fmt.Sprintf("%t", v.bVal)
+	case bool:
+		result, _ := v.GetBool()
+		return fmt.Sprintf("%t", result)
+	case int:
+		result, _ := v.GetInt()
+		return fmt.Sprintf("%d", result)
+	case float64:
+		result, _ := v.GetFloat()
+		return fmt.Sprintf("%f", result)
+	case string:
+		result, _ := v.GetString()
+		return result
 	default:
 		return "unknown"
 	}
-}
-
-func help() {
-	// var v Value
-	// v.SetInt(42)
-	// fmt.Printf("Value: %s, Type: %d\n", v.String(), v.Type())
-	// v.SetFloat(3.14)
-	// fmt.Printf("Value: %s, Type: %d\n", v.String(), v.Type())
-	// if f, ok := v.GetFloat(); ok {
-	// 	fmt.Printf("Float value: %f\n", f)
-	// }
 }

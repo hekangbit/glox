@@ -116,7 +116,7 @@ func runVM(vm *VM) bool {
 		case OP_EQUAL:
 			right := vm.popVstack()
 			left := vm.popVstack()
-			vm.pushVstack(NewBool(ValueEqual(left, right)))
+			vm.pushVstack(NewBool(IsValueEqual(&left, &right)))
 		case OP_GREATER:
 			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
 				right, _ := vm.popVstack().GetFloat()
