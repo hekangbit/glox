@@ -2,14 +2,27 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 )
 
+const (
+	FRAMES_MAX int = iota + 64
+	VSTACK_MAX int = FRAMES_MAX * math.MaxUint8
+)
+
+type CallFrame struct {
+	function   *LoxFunction
+	ip         int
+	slots_base int
+}
+
 type VM struct {
-	chunk   *Chunk
-	ip      int
-	vstack  []Value
-	globals map[string]Value
+	frames      [FRAMES_MAX]CallFrame
+	frameCount  int
+	vstack      [VSTACK_MAX]Value
+	vstackCount int
+	globals     map[string]Value
 }
 
 func isfalsey(value Value) bool {
@@ -38,65 +51,69 @@ func tableDelete(table map[string]Value, name string) {
 	delete(table, name)
 }
 
+func (frame *CallFrame) readByte() byte {
+	data := frame.function.chunk.bcodes[frame.ip]
+	frame.ip++
+	return data
+}
+
+func (frame *CallFrame) readShort() uint16 {
+	result := uint16(frame.function.chunk.bcodes[frame.ip])<<8 + uint16(frame.function.chunk.bcodes[frame.ip+1])
+	frame.ip += 2
+	return result
+}
+
+func (frame *CallFrame) readConstant() Value {
+	pos := frame.readByte()
+	return frame.function.chunk.constants[pos]
+}
+
 func (vm *VM) pushVstack(value Value) {
-	vm.vstack = append(vm.vstack, value)
+	vm.vstack[vm.vstackCount] = value
+	vm.vstackCount++
 }
 
 func (vm *VM) popVstack() Value {
-	value := vm.vstack[len(vm.vstack)-1]
-	vm.vstack = vm.vstack[:len(vm.vstack)-1]
+	value := vm.vstack[vm.vstackCount-1]
+	vm.vstackCount--
 	return value
 }
 
 func (vm *VM) peekVstack(offset int) Value {
-	return vm.vstack[len(vm.vstack)-1-offset]
-}
-
-func (vm *VM) getVStack(slot byte) Value {
-	return vm.vstack[slot]
-}
-
-func (vm *VM) setVStack(slot byte, value Value) {
-	vm.vstack[slot] = value
-}
-
-func (vm *VM) sizeVstack() int {
-	return len(vm.vstack)
+	return vm.vstack[vm.vstackCount-1-offset]
 }
 
 func (vm *VM) resetStack() {
-	vm.vstack = nil
-}
-
-func (vm *VM) readShort() uint16 {
-	result := uint16(vm.chunk.bcodes[vm.ip]<<8 + vm.chunk.bcodes[vm.ip+1])
-	vm.ip += 2
-	return result
+	vm.vstackCount = 0
+	vm.vstack = [VSTACK_MAX]Value{}
+	vm.frameCount = 0
+	vm.frames = [FRAMES_MAX]CallFrame{}
+	vm.globals = make(map[string]Value)
 }
 
 func (vm *VM) RuntimeError(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format, args...)
 	fmt.Fprintf(os.Stderr, "\n")
-	line := vm.chunk.lines[vm.ip-1]
+	frame := vm.frames[vm.frameCount-1]
+	line := frame.function.chunk.lines[frame.ip]
 	fmt.Fprintf(os.Stderr, "[line %d] in script\n", line)
 	vm.resetStack()
 }
 
-func runVM(vm *VM) bool {
+func (vm *VM) runVM() bool {
+	frame := &vm.frames[vm.frameCount-1]
+
 	for {
-		if vm.ip >= len(vm.chunk.bcodes) {
+		if frame.ip >= len(frame.function.chunk.bcodes) {
 			break
 		}
 		DebugVM(vm)
 
-		instruction := vm.chunk.bcodes[vm.ip]
-		vm.ip++
+		instruction := frame.readByte()
+
 		switch instruction {
 		case OP_CONSTANT:
-			pos := vm.chunk.bcodes[vm.ip]
-			vm.ip++
-			value := vm.chunk.constants[pos]
-			vm.pushVstack(value)
+			vm.pushVstack(frame.readConstant())
 		case OP_NIL:
 			vm.pushVstack(NewNil())
 		case OP_FALSE:
@@ -182,15 +199,11 @@ func runVM(vm *VM) bool {
 		case OP_POP:
 			vm.popVstack()
 		case OP_DEFINE_GLOBAL:
-			pos := vm.chunk.bcodes[vm.ip]
-			vm.ip++
-			name, _ := vm.chunk.constants[pos].GetString()
+			name, _ := frame.readConstant().GetString()
 			tableSet(vm.globals, name, vm.peekVstack(0))
 			vm.popVstack()
 		case OP_GET_GLOBAL:
-			pos := vm.chunk.bcodes[vm.ip]
-			vm.ip++
-			name, _ := vm.chunk.constants[pos].GetString()
+			name, _ := frame.readConstant().GetString()
 			value, ok := tableGet(vm.globals, name)
 			if !ok {
 				vm.RuntimeError("Undefined variable '%s'.", name)
@@ -198,9 +211,7 @@ func runVM(vm *VM) bool {
 			}
 			vm.pushVstack(value)
 		case OP_SET_GLOBAL:
-			pos := vm.chunk.bcodes[vm.ip]
-			vm.ip++
-			name, _ := vm.chunk.constants[pos].GetString()
+			name, _ := frame.readConstant().GetString()
 			isNewKey := tableSet(vm.globals, name, vm.peekVstack(0))
 			if isNewKey {
 				tableDelete(vm.globals, name)
@@ -208,33 +219,41 @@ func runVM(vm *VM) bool {
 				return false
 			}
 		case OP_GET_LOCAL:
-			slot := vm.chunk.bcodes[vm.ip]
-			vm.ip++
-			vm.pushVstack(vm.getVStack(slot))
+			slot := frame.readByte()
+			vm.pushVstack(vm.vstack[frame.slots_base+int(slot)])
 		case OP_SET_LOCAL:
-			slot := vm.chunk.bcodes[vm.ip]
-			vm.ip++
-			vm.setVStack(slot, vm.peekVstack(0))
+			slot := frame.readByte()
+			vm.vstack[frame.slots_base+int(slot)] = vm.peekVstack(0)
 		case OP_JUMP:
-			offset := vm.readShort()
-			vm.ip += int(offset)
+			offset := frame.readShort()
+			frame.ip += int(offset)
 		case OP_JUMP_IF_FALSE:
-			offset := vm.readShort()
+			offset := frame.readShort()
 			if isfalsey(vm.peekVstack(0)) {
-				vm.ip += int(offset)
+				frame.ip += int(offset)
 			}
 		case OP_LOOP:
-			offset := vm.readShort()
-			vm.ip -= int(offset)
+			offset := frame.readShort()
+			frame.ip -= int(offset)
 		}
 	}
 	return true
 }
 
-func Interprete(chunk *Chunk) {
-	vm := VM{chunk: chunk, ip: 0, vstack: make([]Value, 0), globals: make(map[string]Value)}
+func Interprete(function *LoxFunction) {
 	fmt.Printf("-- GLOX VM --\n")
-	ok := runVM(&vm)
+	vm := VM{}
+	vm.resetStack()
+
+	vm.pushVstack(FunctionValue(function))
+
+	frame := &vm.frames[vm.frameCount]
+	frame.function = function
+	frame.ip = 0
+	frame.slots_base = 0
+	vm.frameCount++
+
+	ok := vm.runVM()
 	if !ok {
 		fmt.Printf("GLOX VM runtime error\n")
 	}

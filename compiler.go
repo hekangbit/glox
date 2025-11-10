@@ -25,6 +25,11 @@ const (
 	MAX_NUM_OF_LOCAL_VARS int = iota + 256
 )
 
+const (
+	FN_TYPE_SCRIPT int = iota + 0
+	FN_TYPE_FUNCTION
+)
+
 type ParseFn func(*Parser, bool)
 
 type ParseRule struct {
@@ -33,15 +38,13 @@ type ParseRule struct {
 	precedence byte
 }
 
-var rules map[byte]ParseRule
-
 type Parser struct {
 	scanner   Scanner
 	current   Token
 	previous  Token
+	rules     map[byte]ParseRule
 	hadError  bool
 	panicMode bool
-	chunk     *Chunk
 	compiler  Compiler
 }
 
@@ -54,18 +57,35 @@ type Compiler struct {
 	locals     [MAX_NUM_OF_LOCAL_VARS]Local // all locals that are in scope during each point in the compilation process
 	scopeDepth int                          // the number of blocks surrounding the current bit of code we’re compiling
 	localCount int
+	function   *LoxFunction
+	fnType     int
 }
 
 func identifiersEqual(a *Token, b *Token) bool {
 	return a.lexeme == b.lexeme
 }
 
-func getRule(token_type byte) ParseRule {
-	return rules[token_type]
+func (parser *Parser) getRule(token_type byte) ParseRule {
+	return parser.rules[token_type]
+}
+
+func (parser *Parser) currentChunk() *Chunk {
+	return &parser.compiler.function.chunk
+}
+
+func (parser *Parser) currentChunkSize() int {
+	return len(parser.currentChunk().bcodes)
+}
+
+func (parser *Parser) currentFuncName() string {
+	if parser.compiler.function.name == "" {
+		return "<script>"
+	}
+	return parser.compiler.function.name
 }
 
 func (parser *Parser) makeConstant(value Value) byte {
-	offset := AddConstant(parser.chunk, value)
+	offset := AddConstant(parser.currentChunk(), value)
 	if offset > 255 {
 		parser.errorAtPrevious("Too many constants in one chunk.")
 	}
@@ -73,7 +93,7 @@ func (parser *Parser) makeConstant(value Value) byte {
 }
 
 func (parser *Parser) emitByte(b byte) {
-	WriteChunk(parser.chunk, b, parser.previous.line)
+	WriteChunk(parser.currentChunk(), b, parser.previous.line)
 }
 
 func (parser *Parser) emitBytes(b1 byte, b2 byte) {
@@ -149,7 +169,7 @@ func (parser *Parser) match(token_type byte) bool {
 
 func (parser *Parser) parsePrecedence(precedence byte) {
 	parser.advance()
-	prefix := getRule(parser.previous.token_type).prefix
+	prefix := parser.getRule(parser.previous.token_type).prefix
 	if prefix == nil {
 		parser.errorAtPrevious("Expect expression.")
 		return
@@ -158,9 +178,9 @@ func (parser *Parser) parsePrecedence(precedence byte) {
 	canAssign := precedence <= PREC_ASSIGNMENT
 	prefix(parser, canAssign)
 
-	for precedence <= getRule(parser.current.token_type).precedence {
+	for precedence <= parser.getRule(parser.current.token_type).precedence {
 		parser.advance()
-		infix := getRule(parser.previous.token_type).infix
+		infix := parser.getRule(parser.previous.token_type).infix
 		infix(parser, canAssign)
 	}
 
@@ -200,7 +220,7 @@ func (parser *Parser) unary(canAssign bool) {
 
 func (parser *Parser) binary(canAssign bool) {
 	operator_type := parser.previous.token_type
-	rule := getRule(operator_type)
+	rule := parser.getRule(operator_type)
 	parser.parsePrecedence(rule.precedence + 1)
 	switch operator_type {
 	case TOKEN_BANG_EQUAL:
@@ -333,17 +353,18 @@ func (parser *Parser) emitJump(op byte) int {
 	parser.emitByte(op)
 	parser.emitByte(0xFF)
 	parser.emitByte(0xFF)
-	return len(parser.chunk.bcodes) - 2
+	return parser.currentChunkSize() - 2
 }
 
 func (parser *Parser) patchJump(offset int) {
-	jump := len(parser.chunk.bcodes) - offset - 2
+	jump := parser.currentChunkSize() - offset - 2
 	if jump > math.MaxUint16 {
 		parser.errorAtPrevious("Too much code to jump over.")
 	}
 	// Big-endian
-	parser.chunk.bcodes[offset] = byte((jump >> 8) & 0xFF)
-	parser.chunk.bcodes[offset+1] = byte(jump & 0xFF)
+	chunk := parser.currentChunk()
+	chunk.bcodes[offset] = byte((jump >> 8) & 0xFF)
+	chunk.bcodes[offset+1] = byte(jump & 0xFF)
 }
 
 /*
@@ -375,7 +396,7 @@ func (parser *Parser) ifStatement() {
 
 func (parser *Parser) emitLoop(loopStart int) {
 	parser.emitByte(OP_LOOP)
-	offset := len(parser.chunk.bcodes) - loopStart + 2
+	offset := parser.currentChunkSize() - loopStart + 2
 	if offset > math.MaxUint16 {
 		parser.errorAtPrevious("Loop body too large.")
 	}
@@ -384,7 +405,7 @@ func (parser *Parser) emitLoop(loopStart int) {
 }
 
 func (parser *Parser) whileStatement() {
-	loopStart := len(parser.chunk.bcodes)
+	loopStart := parser.currentChunkSize()
 	parser.consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.")
 	parser.expression()
 	parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.")
@@ -411,7 +432,7 @@ func (parser *Parser) forStatement() {
 		parser.expressionStatement()
 	}
 
-	var loopStart int = len(parser.chunk.bcodes)
+	var loopStart int = parser.currentChunkSize()
 	var exitJump int = -1
 
 	if !parser.match(TOKEN_SEMICOLON) {
@@ -423,7 +444,7 @@ func (parser *Parser) forStatement() {
 
 	if !parser.match(TOKEN_RIGHT_PAREN) {
 		bodyJump := parser.emitJump(OP_JUMP)
-		loopIncrement := len(parser.chunk.bcodes)
+		loopIncrement := parser.currentChunkSize()
 		parser.expression()
 		parser.emitByte(OP_POP)
 		parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after for loop clauses.")
@@ -553,8 +574,8 @@ func (parser *Parser) declaration() {
 	}
 }
 
-func initParseRule() {
-	rules = map[byte]ParseRule{
+func (parser *Parser) initParseRule() {
+	parser.rules = map[byte]ParseRule{
 		TOKEN_LEFT_PAREN:    {(*Parser).grouping, nil, PREC_NONE},
 		TOKEN_RIGHT_PAREN:   {nil, nil, PREC_NONE},
 		TOKEN_LEFT_BRACE:    {nil, nil, PREC_NONE},
@@ -598,19 +619,34 @@ func initParseRule() {
 	}
 }
 
-func Compile(source string) (bool, *Chunk) {
-	var chunk Chunk
-	parser := Parser{scanner: Scanner{1, 0, 0, source}, chunk: &chunk}
+func (parser *Parser) initCompiler() {
+	parser.compiler.fnType = FN_TYPE_SCRIPT
+	parser.compiler.function = NewFunction()
+	fmt.Printf("fn: %s\n", parser.compiler.function.name)
+
+	local := parser.compiler.locals[0]
+	local.name.lexeme = ""
+	local.depth = 0
+	parser.compiler.localCount++
+	fmt.Printf("localCount: %d\n", parser.compiler.localCount)
+}
+
+func Compile(source string) (bool, *LoxFunction) {
+	parser := Parser{scanner: Scanner{1, 0, 0, source}, hadError: false, panicMode: false, compiler: Compiler{function: nil}}
 	parser.advance()
 
-	initParseRule()
+	parser.initParseRule()
+	parser.initCompiler()
 	for !parser.match(TOKEN_EOF) {
 		parser.declaration()
 	}
 
+	var function *LoxFunction = nil
+
 	if !parser.hadError {
-		DisassembleChunk(&chunk, "test chunk")
+		function = parser.compiler.function
+		DisassembleChunk(parser.currentChunk(), parser.currentFuncName())
 	}
 
-	return !parser.hadError, &chunk
+	return !parser.hadError, function
 }

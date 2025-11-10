@@ -60,10 +60,10 @@ func Run(source string) error {
 	if DebugFlag {
 		DumpTokens(source)
 	}
-	ok, chunk := Compile(source)
+	ok, function := Compile(source)
 	if !ok {
 		return errors.New("glox compile fail")
 	}
-	Interprete(chunk)
+	Interprete(function)
 	return nil
 }

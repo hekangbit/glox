@@ -108,5 +108,6 @@ func DebugVM(vm *VM) {
 		fmt.Print(" ]")
 	}
 	fmt.Print("\n")
-	DisassembleInstruction(vm.chunk, vm.ip)
+	frame := &vm.frames[vm.frameCount-1]
+	DisassembleInstruction(&frame.function.chunk, frame.ip)
 }

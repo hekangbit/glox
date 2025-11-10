@@ -11,6 +11,21 @@ type Variant struct {
 
 type Value Variant
 
+type LoxFunction struct {
+	arity int
+	chunk Chunk
+	name  string
+}
+
+func NewFunction() *LoxFunction {
+	function := LoxFunction{arity: 0, name: ""}
+	return &function
+}
+
+func FunctionValue(function *LoxFunction) Value {
+	return Value{value: function}
+}
+
 func isSameType(v1 *Value, v2 *Value) bool {
 	if v1.value == nil && v2.value == nil {
 		return true
