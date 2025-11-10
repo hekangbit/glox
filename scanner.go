@@ -138,10 +138,8 @@ func (scanner *Scanner) skipWhitespace() {
 			if scanner.peekNext() != '/' {
 				return
 			}
-			for {
-				if scanner.peek() != '\n' && !scanner.isAtEnd() {
-					scanner.advance()
-				}
+			for scanner.peek() != '\n' && !(scanner.isAtEnd()) {
+				scanner.advance()
 			}
 		default:
 			return
