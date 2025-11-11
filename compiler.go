@@ -539,7 +539,7 @@ func (parser *Parser) varDeclaration() {
 	if parser.match(TOKEN_EQUAL) {
 		parser.expression()
 	} else {
-		parser.emitByte(OP_NIL)
+		parser.emitByte(OP_NIL) // push a default value to vstack
 	}
 	parser.consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.")
 	parser.defineVariable(global)
@@ -569,7 +569,7 @@ func (parser *Parser) function(fnType int) {
 
 	function := parser.endCompiler()
 
-	parser.emitConstant(FunctionValue(function))
+	parser.emitConstant(FunctionValue(function)) // help to push function obj to vstack
 }
 
 func (parser *Parser) functionDeclaration() {
