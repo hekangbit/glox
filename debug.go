@@ -102,9 +102,9 @@ func DebugVM(vm *VM) {
 		return
 	}
 	fmt.Print("          ")
-	for _, v := range vm.vstack {
+	for i := 0; i < vm.vstackCount; i++ {
 		fmt.Print("[ ")
-		fmt.Printf("%s", v.String())
+		fmt.Printf("%s", vm.vstack[i].String())
 		fmt.Print(" ]")
 	}
 	fmt.Print("\n")

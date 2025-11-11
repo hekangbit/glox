@@ -45,7 +45,7 @@ type Parser struct {
 	rules     map[byte]ParseRule
 	hadError  bool
 	panicMode bool
-	compiler  Compiler
+	compiler  *Compiler
 }
 
 type Local struct {
@@ -59,6 +59,7 @@ type Compiler struct {
 	localCount int
 	function   *LoxFunction
 	fnType     int
+	enclosing  *Compiler
 }
 
 func identifiersEqual(a *Token, b *Token) bool {
@@ -75,13 +76,6 @@ func (parser *Parser) currentChunk() *Chunk {
 
 func (parser *Parser) currentChunkSize() int {
 	return len(parser.currentChunk().bcodes)
-}
-
-func (parser *Parser) currentFuncName() string {
-	if parser.compiler.function.name == "" {
-		return "<script>"
-	}
-	return parser.compiler.function.name
 }
 
 func (parser *Parser) makeConstant(value Value) byte {
@@ -278,8 +272,7 @@ func (parser *Parser) stringLiteral(canAssign bool) {
 }
 
 func (parser *Parser) resolveLocal(name *Token) (byte, bool) {
-	localNum := parser.compiler.localCount
-	for i := localNum - 1; i >= 0; i-- {
+	for i := parser.compiler.localCount - 1; i >= 0; i-- {
 		local := &parser.compiler.locals[i]
 		if identifiersEqual(name, &local.name) {
 			if local.depth == -1 {
@@ -527,6 +520,9 @@ func (parser *Parser) parseVariable(error_msg string) byte {
 }
 
 func (parser *Parser) markInitialized() {
+	if parser.compiler.scopeDepth == 0 {
+		return
+	}
 	parser.compiler.locals[parser.compiler.localCount-1].depth = parser.compiler.scopeDepth
 }
 
@@ -549,6 +545,40 @@ func (parser *Parser) varDeclaration() {
 	parser.defineVariable(global)
 }
 
+func (parser *Parser) function(fnType int) {
+	var compiler Compiler
+	parser.initCompiler(&compiler, fnType)
+	parser.beginScope()
+	parser.consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.")
+	if !parser.check(TOKEN_RIGHT_PAREN) {
+		for {
+			parser.compiler.function.arity++
+			if parser.compiler.function.arity > 255 {
+				parser.errorAtCurrent("Can't have more than 255 paramenters.")
+			}
+			constant := parser.parseVariable("Expect parameter name.")
+			parser.defineVariable(constant)
+			if parser.match(TOKEN_COMMA) {
+				break
+			}
+		}
+	}
+	parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after paramenters.")
+	parser.consume(TOKEN_LEFT_BRACE, "Expect '{' before function body.")
+	parser.block()
+
+	function := parser.endCompiler()
+
+	parser.emitConstant(FunctionValue(function))
+}
+
+func (parser *Parser) functionDeclaration() {
+	global := parser.parseVariable("Expect function name.")
+	parser.markInitialized()
+	parser.function(FN_TYPE_FUNCTION)
+	parser.defineVariable(global)
+}
+
 func (parser *Parser) synchronize() {
 	parser.panicMode = false
 	for parser.current.token_type != TOKEN_EOF {
@@ -566,6 +596,8 @@ func (parser *Parser) synchronize() {
 func (parser *Parser) declaration() {
 	if parser.match(TOKEN_VAR) {
 		parser.varDeclaration()
+	} else if parser.match(TOKEN_FUN) {
+		parser.functionDeclaration()
 	} else {
 		parser.statement()
 	}
@@ -619,34 +651,50 @@ func (parser *Parser) initParseRule() {
 	}
 }
 
-func (parser *Parser) initCompiler() {
-	parser.compiler.fnType = FN_TYPE_SCRIPT
-	parser.compiler.function = NewFunction()
-	fmt.Printf("fn: %s\n", parser.compiler.function.name)
+func (parser *Parser) initCompiler(compiler *Compiler, fnType int) {
+	compiler.fnType = fnType
+	compiler.function = NewFunction()
+	compiler.scopeDepth = 0
+	compiler.localCount = 0
+	compiler.function.name = ""
 
-	local := parser.compiler.locals[0]
-	local.name.lexeme = ""
+	if fnType != FN_TYPE_SCRIPT {
+		compiler.function.name = parser.previous.lexeme
+	}
+
+	local := compiler.locals[compiler.localCount]
+	compiler.localCount++
 	local.depth = 0
-	parser.compiler.localCount++
-	fmt.Printf("localCount: %d\n", parser.compiler.localCount)
+	local.name.lexeme = ""
+	if fnType != FN_TYPE_FUNCTION {
+		local.name.lexeme = "this"
+	}
+
+	compiler.enclosing = parser.compiler
+	parser.compiler = compiler
+}
+
+func (parser *Parser) endCompiler() *LoxFunction {
+	parser.emitReturn()
+	function := parser.compiler.function
+	if !parser.hadError {
+		DisassembleChunk(parser.currentChunk(), NormalizedFuncName(function.name))
+	}
+	parser.compiler = parser.compiler.enclosing
+	return function
 }
 
 func Compile(source string) (bool, *LoxFunction) {
-	parser := Parser{scanner: Scanner{1, 0, 0, source}, hadError: false, panicMode: false, compiler: Compiler{function: nil}}
+	var compiler Compiler
+	parser := Parser{scanner: Scanner{1, 0, 0, source}, hadError: false, panicMode: false}
 	parser.advance()
 
 	parser.initParseRule()
-	parser.initCompiler()
+	parser.initCompiler(&compiler, FN_TYPE_SCRIPT)
 	for !parser.match(TOKEN_EOF) {
 		parser.declaration()
 	}
-
-	var function *LoxFunction = nil
-
-	if !parser.hadError {
-		function = parser.compiler.function
-		DisassembleChunk(parser.currentChunk(), parser.currentFuncName())
-	}
+	function := parser.endCompiler()
 
 	return !parser.hadError, function
 }

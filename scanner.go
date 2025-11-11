@@ -87,7 +87,7 @@ func isDigit(c byte) bool {
 }
 
 func isAlpha(c byte) bool {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') && c == '_'
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
 }
 
 func (scanner *Scanner) match(expected byte) bool {

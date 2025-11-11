@@ -18,8 +18,7 @@ type LoxFunction struct {
 }
 
 func NewFunction() *LoxFunction {
-	function := LoxFunction{arity: 0, name: ""}
-	return &function
+	return &LoxFunction{arity: 0, name: ""}
 }
 
 func FunctionValue(function *LoxFunction) Value {
@@ -179,7 +178,6 @@ func IsValueEqual(v1, v2 *Value) bool {
 }
 
 func (v Value) String() string {
-
 	switch v.value.(type) {
 	case nil:
 		return "nil"
@@ -195,7 +193,17 @@ func (v Value) String() string {
 	case string:
 		result, _ := v.GetString()
 		return result
+	case *LoxFunction:
+		function, _ := v.value.(*LoxFunction)
+		return NormalizedFuncName(function.name)
 	default:
 		return "unknown"
 	}
+}
+
+func NormalizedFuncName(name string) string {
+	if name == "" {
+		return "<script>"
+	}
+	return "<fn " + name + ">"
 }
