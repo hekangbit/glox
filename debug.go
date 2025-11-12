@@ -17,13 +17,12 @@ func ConstInstruction(name string, chunk *Chunk, offset int) int {
 }
 
 func ByteInstruction(name string, chunk *Chunk, offset int) int {
-	slot_index := chunk.bcodes[offset+1]
-	fmt.Printf("%-16s %4d\n", name, slot_index)
+	fmt.Printf("%-16s %4d\n", name, chunk.bcodes[offset+1])
 	return offset + 2
 }
 
 func JumpInstruction(name string, sign int, chunk *Chunk, offset int) int {
-	var jump uint16 = uint16(chunk.bcodes[offset+1]<<8 + chunk.bcodes[offset+2])
+	var jump uint16 = uint16(chunk.bcodes[offset+1])<<8 + uint16(chunk.bcodes[offset+2])
 	fmt.Printf("%-16s %4d -> %d\n", name, offset, offset+3+sign*int(jump))
 	return offset + 3
 }
@@ -81,6 +80,8 @@ func DisassembleInstruction(chunk *Chunk, offset int) int {
 		return JumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset)
 	case OP_LOOP:
 		return JumpInstruction("OP_LOOP", -1, chunk, offset)
+	case OP_CALL:
+		return ByteInstruction("OP_CALL", chunk, offset)
 	default:
 		fmt.Printf("Unknown opcode %v\n", instruction)
 		return offset + 1

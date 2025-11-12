@@ -91,12 +91,47 @@ func (vm *VM) resetStack() {
 	vm.globals = make(map[string]Value)
 }
 
+func (vm *VM) call(function *LoxFunction, argCount int) bool {
+	if argCount != function.arity {
+		vm.RuntimeError("Expected %d arguments but got %d.", function.arity, argCount)
+		return false
+	}
+	if vm.frameCount == FRAMES_MAX {
+		vm.RuntimeError("Stack overflow.")
+		return false
+	}
+	frame := &vm.frames[vm.frameCount]
+	vm.frameCount++
+	frame.function = function
+	frame.ip = 0
+	frame.slots_base = vm.vstackCount - argCount - 1
+	return true
+}
+
+func (vm *VM) callValue(callee Value, argCount int) bool {
+	if callee.IsFunction() {
+		function, _ := callee.GetFunction()
+		return vm.call(function, argCount)
+	}
+	vm.RuntimeError("Can only call functions and classes.")
+	return false
+}
+
 func (vm *VM) RuntimeError(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format, args...)
 	fmt.Fprintf(os.Stderr, "\n")
-	frame := vm.frames[vm.frameCount-1]
-	line := frame.function.chunk.lines[frame.ip]
-	fmt.Fprintf(os.Stderr, "[line %d] in script\n", line)
+
+	for i := vm.frameCount - 1; i >= 0; i-- {
+		frame := &vm.frames[i]
+		function := frame.function
+		fmt.Fprintf(os.Stderr, "[line %d] in ", function.chunk.lines[frame.ip])
+		if function.name == "" {
+			fmt.Fprintf(os.Stderr, "script\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "%s()\n", function.name)
+		}
+	}
+
 	vm.resetStack()
 }
 
@@ -193,7 +228,15 @@ func (vm *VM) runVM() bool {
 				return false
 			}
 		case OP_RETURN:
-			return true
+			result := vm.popVstack()
+			vm.frameCount--
+			if vm.frameCount == 0 {
+				vm.popVstack()
+				return true
+			}
+			vm.vstackCount = frame.slots_base
+			vm.pushVstack(result)
+			frame = &vm.frames[vm.frameCount-1]
 		case OP_PRINT:
 			fmt.Printf("%s\n", vm.popVstack().String())
 		case OP_POP:
@@ -235,6 +278,12 @@ func (vm *VM) runVM() bool {
 		case OP_LOOP:
 			offset := frame.readShort()
 			frame.ip -= int(offset)
+		case OP_CALL:
+			argCount := frame.readByte()
+			if !vm.callValue(vm.peekVstack(int(argCount)), int(argCount)) {
+				return false
+			}
+			frame = &vm.frames[vm.frameCount-1]
 		}
 	}
 	return true
@@ -246,12 +295,7 @@ func Interprete(function *LoxFunction) {
 	vm.resetStack()
 
 	vm.pushVstack(FunctionValue(function))
-
-	frame := &vm.frames[vm.frameCount]
-	frame.function = function
-	frame.ip = 0
-	frame.slots_base = 0
-	vm.frameCount++
+	vm.call(function, 0)
 
 	ok := vm.runVM()
 	if !ok {

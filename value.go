@@ -94,6 +94,11 @@ func (v Value) IsBool() bool {
 	return ok
 }
 
+func (v Value) IsFunction() bool {
+	_, ok := v.value.(*LoxFunction)
+	return ok
+}
+
 func (v Value) GetInt() (int, bool) {
 	result, ok := v.value.(int)
 	if ok {
@@ -124,6 +129,14 @@ func (v Value) GetBool() (bool, bool) {
 		return result, true
 	}
 	return false, false
+}
+
+func (v Value) GetFunction() (*LoxFunction, bool) {
+	result, ok := v.value.(*LoxFunction)
+	if ok {
+		return result, true
+	}
+	return nil, false
 }
 
 func (v *Value) SetNil() {

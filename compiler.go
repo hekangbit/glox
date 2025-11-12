@@ -100,6 +100,7 @@ func (parser *Parser) emitConstant(value Value) {
 }
 
 func (parser *Parser) emitReturn() {
+	parser.emitByte(OP_NIL)
 	parser.emitByte(OP_RETURN)
 }
 
@@ -311,6 +312,29 @@ func (parser *Parser) variable(canAssign bool) {
 	parser.namedVariable(&parser.previous, canAssign)
 }
 
+func (parser *Parser) argumentList() byte {
+	var argCount byte = 0
+	if !parser.check(TOKEN_RIGHT_PAREN) {
+		for {
+			parser.expression()
+			if argCount == 255 {
+				parser.errorAtPrevious("Can't have more than 255 arguments.")
+			}
+			argCount++
+			if !parser.match(TOKEN_COMMA) {
+				break
+			}
+		}
+	}
+	parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after argument list.")
+	return argCount
+}
+
+func (parser *Parser) call(canAssign bool) {
+	argCount := parser.argumentList()
+	parser.emitBytes(OP_CALL, argCount)
+}
+
 func (parser *Parser) printStatement() {
 	parser.expression()
 	parser.consume(TOKEN_SEMICOLON, "Expect ';' after value.")
@@ -457,6 +481,19 @@ func (parser *Parser) forStatement() {
 	parser.endScope()
 }
 
+func (parser *Parser) returnStatement() {
+	if parser.compiler.fnType == FN_TYPE_SCRIPT {
+		parser.errorAtPrevious("Can't return from top-level code.")
+	}
+	if parser.match(TOKEN_SEMICOLON) {
+		parser.emitReturn()
+	} else {
+		parser.expression()
+		parser.consume(TOKEN_SEMICOLON, "Expect ';' after return value.")
+		parser.emitByte(OP_RETURN)
+	}
+}
+
 func (parser *Parser) statement() {
 	if parser.match(TOKEN_PRINT) {
 		parser.printStatement()
@@ -470,6 +507,8 @@ func (parser *Parser) statement() {
 		parser.whileStatement()
 	} else if parser.match(TOKEN_FOR) {
 		parser.forStatement()
+	} else if parser.match(TOKEN_RETURN) {
+		parser.returnStatement()
 	} else {
 		parser.expressionStatement()
 	}
@@ -558,7 +597,7 @@ func (parser *Parser) function(fnType int) {
 			}
 			constant := parser.parseVariable("Expect parameter name.")
 			parser.defineVariable(constant)
-			if parser.match(TOKEN_COMMA) {
+			if !parser.match(TOKEN_COMMA) {
 				break
 			}
 		}
@@ -608,7 +647,7 @@ func (parser *Parser) declaration() {
 
 func (parser *Parser) initParseRule() {
 	parser.rules = map[byte]ParseRule{
-		TOKEN_LEFT_PAREN:    {(*Parser).grouping, nil, PREC_NONE},
+		TOKEN_LEFT_PAREN:    {(*Parser).grouping, (*Parser).call, PREC_CALL},
 		TOKEN_RIGHT_PAREN:   {nil, nil, PREC_NONE},
 		TOKEN_LEFT_BRACE:    {nil, nil, PREC_NONE},
 		TOKEN_RIGHT_BRACE:   {nil, nil, PREC_NONE},
