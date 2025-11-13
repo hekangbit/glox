@@ -608,7 +608,7 @@ func (parser *Parser) function(fnType int) {
 
 	function := parser.endCompiler()
 
-	parser.emitConstant(FunctionValue(function)) // help to push function obj to vstack
+	parser.emitConstant(NewFunction(function)) // help to push function obj to vstack
 }
 
 func (parser *Parser) functionDeclaration() {
@@ -692,10 +692,9 @@ func (parser *Parser) initParseRule() {
 
 func (parser *Parser) initCompiler(compiler *Compiler, fnType int) {
 	compiler.fnType = fnType
-	compiler.function = NewFunction()
+	compiler.function = AllocFunction()
 	compiler.scopeDepth = 0
 	compiler.localCount = 0
-	compiler.function.name = ""
 
 	if fnType != FN_TYPE_SCRIPT {
 		compiler.function.name = parser.previous.lexeme

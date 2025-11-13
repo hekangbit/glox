@@ -112,6 +112,12 @@ func (vm *VM) callValue(callee Value, argCount int) bool {
 	if callee.IsFunction() {
 		function, _ := callee.GetFunction()
 		return vm.call(function, argCount)
+	} else if callee.IsNative() {
+		native, _ := callee.GetNative()
+		result := native(argCount, &vm.vstack[vm.vstackCount-argCount])
+		vm.vstackCount -= argCount + 1
+		vm.pushVstack(result)
+		return true
 	}
 	vm.RuntimeError("Can only call functions and classes.")
 	return false
@@ -249,7 +255,7 @@ func (vm *VM) runVM() bool {
 			name, _ := frame.readConstant().GetString()
 			value, ok := tableGet(vm.globals, name)
 			if !ok {
-				vm.RuntimeError("Undefined variable '%s'.", name)
+				vm.RuntimeError("Undefined variable '%s' when GET_GLOBAL.", name)
 				return false
 			}
 			vm.pushVstack(value)
@@ -258,7 +264,7 @@ func (vm *VM) runVM() bool {
 			isNewKey := tableSet(vm.globals, name, vm.peekVstack(0))
 			if isNewKey {
 				tableDelete(vm.globals, name)
-				vm.RuntimeError("Undefined variable '%s'.", name)
+				vm.RuntimeError("Undefined variable '%s'. when SET_GLOBAL", name)
 				return false
 			}
 		case OP_GET_LOCAL:
@@ -289,12 +295,22 @@ func (vm *VM) runVM() bool {
 	return true
 }
 
+func (vm *VM) DefineNative(name string, function NativeFn) {
+	vm.pushVstack(NewString(name))
+	vm.pushVstack(NewNative(function))
+	tmp, _ := vm.peekVstack(1).GetString()
+	tableSet(vm.globals, tmp, vm.peekVstack(0))
+	vm.popVstack()
+	vm.popVstack()
+}
+
 func Interprete(function *LoxFunction) {
 	fmt.Printf("-- GLOX VM --\n")
 	vm := VM{}
 	vm.resetStack()
+	vm.DefineNative("clock", ClockNative)
 
-	vm.pushVstack(FunctionValue(function))
+	vm.pushVstack(NewFunction(function))
 	vm.call(function, 0)
 
 	ok := vm.runVM()

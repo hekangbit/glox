@@ -17,12 +17,10 @@ type LoxFunction struct {
 	name  string
 }
 
-func NewFunction() *LoxFunction {
-	return &LoxFunction{arity: 0, name: ""}
-}
+type NativeFn func(int, *Value) Value
 
-func FunctionValue(function *LoxFunction) Value {
-	return Value{value: function}
+func AllocFunction() *LoxFunction {
+	return &LoxFunction{arity: 0, name: "", chunk: Chunk{}}
 }
 
 func isSameType(v1 *Value, v2 *Value) bool {
@@ -43,13 +41,6 @@ func (v *Value) Get() interface{} {
 	return v.value
 }
 
-func (v *Value) getType() reflect.Type {
-	if v.value == nil {
-		return nil
-	}
-	return reflect.TypeOf(v.value)
-}
-
 func NewNil() Value {
 	return Value{value: nil}
 }
@@ -68,6 +59,14 @@ func NewString(v string) Value {
 
 func NewBool(v bool) Value {
 	return Value{value: v}
+}
+
+func NewFunction(function *LoxFunction) Value {
+	return Value{value: function}
+}
+
+func NewNative(function NativeFn) Value {
+	return Value{value: function}
 }
 
 func (v Value) IsNil() bool {
@@ -96,6 +95,11 @@ func (v Value) IsBool() bool {
 
 func (v Value) IsFunction() bool {
 	_, ok := v.value.(*LoxFunction)
+	return ok
+}
+
+func (v Value) IsNative() bool {
+	_, ok := v.value.(NativeFn)
 	return ok
 }
 
@@ -133,6 +137,14 @@ func (v Value) GetBool() (bool, bool) {
 
 func (v Value) GetFunction() (*LoxFunction, bool) {
 	result, ok := v.value.(*LoxFunction)
+	if ok {
+		return result, true
+	}
+	return nil, false
+}
+
+func (v Value) GetNative() (NativeFn, bool) {
+	result, ok := v.value.(NativeFn)
 	if ok {
 		return result, true
 	}
@@ -209,6 +221,8 @@ func (v Value) String() string {
 	case *LoxFunction:
 		function, _ := v.value.(*LoxFunction)
 		return NormalizedFuncName(function.name)
+	case NativeFn:
+		return "<native fn>"
 	default:
 		return "unknown"
 	}
