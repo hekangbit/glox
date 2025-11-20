@@ -12,15 +12,41 @@ type Variant struct {
 type Value Variant
 
 type LoxFunction struct {
-	arity int
-	chunk Chunk
-	name  string
+	arity        int
+	chunk        Chunk
+	name         string
+	upValueCount int
+}
+
+type LoxClosure struct {
+	function *LoxFunction
+	upvalues []*UpvalueObj
+}
+
+type UpvalueObj struct {
+	ref      *Value
+	location int
+	closed   Value
+	next     *UpvalueObj
 }
 
 type NativeFn func(int, *Value) Value
 
-func AllocFunction() *LoxFunction {
-	return &LoxFunction{arity: 0, name: "", chunk: Chunk{}}
+func NewFunction() *LoxFunction {
+	return &LoxFunction{arity: 0, name: "", chunk: Chunk{}, upValueCount: 0}
+}
+
+func NewClosure(function *LoxFunction) *LoxClosure {
+	closure := LoxClosure{function: function, upvalues: make([]*UpvalueObj, 0)}
+	for i := 0; i < function.upValueCount; i++ {
+		closure.upvalues = append(closure.upvalues, nil)
+	}
+	return &closure
+}
+
+func NewUpvalueObj(ref *Value, slot int) *UpvalueObj {
+	upvalue := UpvalueObj{ref: ref, location: slot, next: nil, closed: Value{}}
+	return &upvalue
 }
 
 func isSameType(v1 *Value, v2 *Value) bool {
@@ -41,32 +67,36 @@ func (v *Value) Get() interface{} {
 	return v.value
 }
 
-func NewNil() Value {
+func NilVal() Value {
 	return Value{value: nil}
 }
 
-func NewInt(v int) Value {
+func IntVal(v int) Value {
 	return Value{value: v}
 }
 
-func NewFloat(v float64) Value {
+func FloatVal(v float64) Value {
 	return Value{value: v}
 }
 
-func NewString(v string) Value {
+func StringVal(v string) Value {
 	return Value{value: v}
 }
 
-func NewBool(v bool) Value {
+func BoolVal(v bool) Value {
 	return Value{value: v}
 }
 
-func NewFunction(function *LoxFunction) Value {
+func FunctionVal(function *LoxFunction) Value {
 	return Value{value: function}
 }
 
-func NewNative(function NativeFn) Value {
+func NativeVal(function NativeFn) Value {
 	return Value{value: function}
+}
+
+func ClosureVal(closure *LoxClosure) Value {
+	return Value{value: closure}
 }
 
 func (v Value) IsNil() bool {
@@ -100,6 +130,11 @@ func (v Value) IsFunction() bool {
 
 func (v Value) IsNative() bool {
 	_, ok := v.value.(NativeFn)
+	return ok
+}
+
+func (v Value) IsClosure() bool {
+	_, ok := v.value.(*LoxClosure)
 	return ok
 }
 
@@ -145,6 +180,14 @@ func (v Value) GetFunction() (*LoxFunction, bool) {
 
 func (v Value) GetNative() (NativeFn, bool) {
 	result, ok := v.value.(NativeFn)
+	if ok {
+		return result, true
+	}
+	return nil, false
+}
+
+func (v Value) GetClosure() (*LoxClosure, bool) {
+	result, ok := v.value.(*LoxClosure)
 	if ok {
 		return result, true
 	}
@@ -221,6 +264,9 @@ func (v Value) String() string {
 	case *LoxFunction:
 		function, _ := v.value.(*LoxFunction)
 		return NormalizedFuncName(function.name)
+	case *LoxClosure:
+		closure, _ := v.value.(*LoxClosure)
+		return NormalizedClosureName(closure)
 	case NativeFn:
 		return "<native fn>"
 	default:
@@ -233,4 +279,12 @@ func NormalizedFuncName(name string) string {
 		return "<script>"
 	}
 	return "<fn " + name + ">"
+}
+
+func NormalizedClosureName(closure *LoxClosure) string {
+	addr := fmt.Sprintf("%p", closure)
+	if closure.function.name == "" {
+		return "<" + addr + " script>"
+	}
+	return "<" + addr + " " + closure.function.name + ">"
 }

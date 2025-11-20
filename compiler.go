@@ -22,12 +22,13 @@ const (
 )
 
 const (
-	MAX_NUM_OF_LOCAL_VARS int = iota + 256
+	FN_TYPE_SCRIPT int = iota + 0
+	FN_TYPE_FUNCTION
 )
 
 const (
-	FN_TYPE_SCRIPT int = iota + 0
-	FN_TYPE_FUNCTION
+	MAX_NUM_OF_LOCAL_VARS int = math.MaxUint8
+	MAX_NUM_OF_UP_VALS    int = math.MaxUint8
 )
 
 type ParseFn func(*Parser, bool)
@@ -49,14 +50,21 @@ type Parser struct {
 }
 
 type Local struct {
-	name  Token
-	depth int
+	name       Token
+	depth      int
+	isCaptured bool
+}
+
+type UpValue struct {
+	index   byte
+	isLocal bool
 }
 
 type Compiler struct {
 	locals     [MAX_NUM_OF_LOCAL_VARS]Local // all locals that are in scope during each point in the compilation process
 	scopeDepth int                          // the number of blocks surrounding the current bit of code we’re compiling
 	localCount int
+	upValues   [MAX_NUM_OF_UP_VALS]UpValue
 	function   *LoxFunction
 	fnType     int
 	enclosing  *Compiler
@@ -194,7 +202,7 @@ func (parser *Parser) number(canAssign bool) {
 		parser.errorAtPrevious("Failed convert string to number.")
 		return
 	}
-	parser.emitConstant(NewFloat(value))
+	parser.emitConstant(FloatVal(value))
 }
 
 func (parser *Parser) grouping(canAssign bool) {
@@ -269,12 +277,12 @@ func (parser *Parser) boolLiteral(canAssign bool) {
 }
 
 func (parser *Parser) stringLiteral(canAssign bool) {
-	parser.emitConstant(NewString(parser.previous.lexeme[1 : len(parser.previous.lexeme)-1]))
+	parser.emitConstant(StringVal(parser.previous.lexeme[1 : len(parser.previous.lexeme)-1]))
 }
 
-func (parser *Parser) resolveLocal(name *Token) (byte, bool) {
-	for i := parser.compiler.localCount - 1; i >= 0; i-- {
-		local := &parser.compiler.locals[i]
+func (parser *Parser) resolveLocal(compiler *Compiler, name *Token) (byte, bool) {
+	for i := compiler.localCount - 1; i >= 0; i-- {
+		local := &compiler.locals[i]
 		if identifiersEqual(name, &local.name) {
 			if local.depth == -1 {
 				parser.errorAtPrevious("Can't read local variable in its own initializer.")
@@ -285,15 +293,54 @@ func (parser *Parser) resolveLocal(name *Token) (byte, bool) {
 	return 0, false
 }
 
+func (parser *Parser) addUpvalue(compiler *Compiler, index byte, isLocal bool) (byte, bool) {
+	for i := 0; i < compiler.function.upValueCount; i++ {
+		if compiler.upValues[i].index == index && compiler.upValues[i].isLocal == isLocal {
+			return byte(i), true
+		}
+	}
+	upValueCount := compiler.function.upValueCount
+
+	if upValueCount >= MAX_NUM_OF_UP_VALS {
+		parser.errorAtPrevious("Too many closure variables in function.")
+		return 0, false
+	}
+	compiler.upValues[upValueCount].isLocal = isLocal
+	compiler.upValues[upValueCount].index = index
+	compiler.function.upValueCount++
+	return byte(upValueCount), true
+}
+
+func (parser *Parser) resolveUpvalue(compiler *Compiler, name *Token) (byte, bool) {
+	var local byte
+	var upvalue byte
+	var ok bool
+	if compiler.enclosing == nil {
+		return 0, false
+	}
+	local, ok = parser.resolveLocal(compiler.enclosing, name)
+	if ok {
+		compiler.enclosing.locals[local].isCaptured = true
+		return parser.addUpvalue(compiler, local, true)
+	}
+	upvalue, ok = parser.resolveUpvalue(compiler.enclosing, name)
+	if ok {
+		return parser.addUpvalue(compiler, upvalue, false)
+	}
+	return 0, false
+}
+
 func (parser *Parser) namedVariable(name *Token, canAssign bool) {
 	var getOP, setOP byte
-	var arg byte
+	var arg byte = 0
+	var ok bool = false
 
-	arg, isLocal := parser.resolveLocal(name)
-
-	if isLocal {
+	if arg, ok = parser.resolveLocal(parser.compiler, name); ok {
 		getOP = OP_GET_LOCAL
 		setOP = OP_SET_LOCAL
+	} else if arg, ok = parser.resolveUpvalue(parser.compiler, name); ok {
+		getOP = OP_GET_UPVALUE
+		setOP = OP_SET_UPVALUE
 	} else {
 		arg = parser.identifierConstant(name)
 		getOP = OP_GET_GLOBAL
@@ -361,7 +408,11 @@ func (parser *Parser) beginScope() {
 func (parser *Parser) endScope() {
 	parser.compiler.scopeDepth--
 	for parser.compiler.localCount > 0 && parser.compiler.locals[parser.compiler.localCount-1].depth > parser.compiler.scopeDepth {
-		parser.emitByte(OP_POP)
+		if parser.compiler.locals[parser.compiler.localCount-1].isCaptured {
+			parser.emitByte(OP_CLOSE_UPVALUE)
+		} else {
+			parser.emitByte(OP_POP)
+		}
 		parser.compiler.localCount--
 	}
 }
@@ -515,7 +566,7 @@ func (parser *Parser) statement() {
 }
 
 func (parser *Parser) identifierConstant(token *Token) byte {
-	return parser.makeConstant(NewString(token.lexeme))
+	return parser.makeConstant(StringVal(token.lexeme))
 }
 
 func (parser *Parser) addLocal(name *Token) {
@@ -527,6 +578,7 @@ func (parser *Parser) addLocal(name *Token) {
 	parser.compiler.localCount++
 	local.name = *name
 	local.depth = -1
+	local.isCaptured = false
 }
 
 func (parser *Parser) declareVariable() {
@@ -607,8 +659,16 @@ func (parser *Parser) function(fnType int) {
 	parser.block()
 
 	function := parser.endCompiler()
+	parser.emitBytes(OP_CLOSURE, parser.makeConstant(FunctionVal(function))) // add function obj to bcode
 
-	parser.emitConstant(NewFunction(function)) // help to push function obj to vstack
+	for i := 0; i < function.upValueCount; i++ {
+		var islocal byte = 0
+		if compiler.upValues[i].isLocal {
+			islocal = 1
+		}
+		parser.emitByte(islocal)
+		parser.emitByte(compiler.upValues[i].index)
+	}
 }
 
 func (parser *Parser) functionDeclaration() {
@@ -692,7 +752,7 @@ func (parser *Parser) initParseRule() {
 
 func (parser *Parser) initCompiler(compiler *Compiler, fnType int) {
 	compiler.fnType = fnType
-	compiler.function = AllocFunction()
+	compiler.function = NewFunction()
 	compiler.scopeDepth = 0
 	compiler.localCount = 0
 
@@ -703,6 +763,7 @@ func (parser *Parser) initCompiler(compiler *Compiler, fnType int) {
 	local := compiler.locals[compiler.localCount]
 	compiler.localCount++
 	local.depth = 0
+	local.isCaptured = false
 	local.name.lexeme = ""
 	if fnType != FN_TYPE_FUNCTION {
 		local.name.lexeme = "this"

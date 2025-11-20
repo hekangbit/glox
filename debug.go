@@ -74,6 +74,10 @@ func DisassembleInstruction(chunk *Chunk, offset int) int {
 		return ByteInstruction("OP_GET_LOCAL", chunk, offset)
 	case OP_SET_LOCAL:
 		return ByteInstruction("OP_SET_LOCAL", chunk, offset)
+	case OP_GET_UPVALUE:
+		return ByteInstruction("OP_GET_UPVALUE", chunk, offset)
+	case OP_SET_UPVALUE:
+		return ByteInstruction("OP_SET_UPVALUE", chunk, offset)
 	case OP_JUMP:
 		return JumpInstruction("OP_JUMP", 1, chunk, offset)
 	case OP_JUMP_IF_FALSE:
@@ -82,6 +86,27 @@ func DisassembleInstruction(chunk *Chunk, offset int) int {
 		return JumpInstruction("OP_LOOP", -1, chunk, offset)
 	case OP_CALL:
 		return ByteInstruction("OP_CALL", chunk, offset)
+	case OP_CLOSURE:
+		offset++
+		constant := chunk.bcodes[offset]
+		offset++
+		fmt.Printf("%-16s %4d ", "OP_CLOSURE", constant)
+		fmt.Printf("%s", chunk.constants[constant].String())
+		fmt.Printf("\n")
+		function, _ := chunk.constants[constant].GetFunction()
+		for i := 0; i < function.upValueCount; i++ {
+			isLocal := chunk.bcodes[offset]
+			index := chunk.bcodes[offset+1]
+			var msg string = "upvalue"
+			if isLocal != 0 {
+				msg = "local"
+			}
+			fmt.Printf("%04d      |                     %s %d\n", offset, msg, index)
+			offset += 2
+		}
+		return offset
+	case OP_CLOSE_UPVALUE:
+		return SimpleInstruction("OP_CLOSE_UPVALUE", offset)
 	default:
 		fmt.Printf("Unknown opcode %v\n", instruction)
 		return offset + 1
@@ -110,5 +135,5 @@ func DebugVM(vm *VM) {
 	}
 	fmt.Print("\n")
 	frame := &vm.frames[vm.frameCount-1]
-	DisassembleInstruction(&frame.function.chunk, frame.ip)
+	DisassembleInstruction(&frame.closure.function.chunk, frame.ip)
 }

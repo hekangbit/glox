@@ -12,17 +12,18 @@ const (
 )
 
 type CallFrame struct {
-	function   *LoxFunction
+	closure    *LoxClosure
 	ip         int
 	slots_base int
 }
 
 type VM struct {
-	frames      [FRAMES_MAX]CallFrame
-	frameCount  int
-	vstack      [VSTACK_MAX]Value
-	vstackCount int
-	globals     map[string]Value
+	frames       [FRAMES_MAX]CallFrame
+	frameCount   int
+	vstack       [VSTACK_MAX]Value
+	vstackCount  int
+	globals      map[string]Value
+	openUpvalues *UpvalueObj
 }
 
 func isfalsey(value Value) bool {
@@ -52,20 +53,20 @@ func tableDelete(table map[string]Value, name string) {
 }
 
 func (frame *CallFrame) readByte() byte {
-	data := frame.function.chunk.bcodes[frame.ip]
+	data := frame.closure.function.chunk.bcodes[frame.ip]
 	frame.ip++
 	return data
 }
 
 func (frame *CallFrame) readShort() uint16 {
-	result := uint16(frame.function.chunk.bcodes[frame.ip])<<8 + uint16(frame.function.chunk.bcodes[frame.ip+1])
+	result := uint16(frame.closure.function.chunk.bcodes[frame.ip])<<8 + uint16(frame.closure.function.chunk.bcodes[frame.ip+1])
 	frame.ip += 2
 	return result
 }
 
 func (frame *CallFrame) readConstant() Value {
 	pos := frame.readByte()
-	return frame.function.chunk.constants[pos]
+	return frame.closure.function.chunk.constants[pos]
 }
 
 func (vm *VM) pushVstack(value Value) {
@@ -89,9 +90,11 @@ func (vm *VM) resetStack() {
 	vm.frameCount = 0
 	vm.frames = [FRAMES_MAX]CallFrame{}
 	vm.globals = make(map[string]Value)
+	vm.openUpvalues = nil
 }
 
-func (vm *VM) call(function *LoxFunction, argCount int) bool {
+func (vm *VM) call(closure *LoxClosure, argCount int) bool {
+	function := closure.function
 	if argCount != function.arity {
 		vm.RuntimeError("Expected %d arguments but got %d.", function.arity, argCount)
 		return false
@@ -102,16 +105,16 @@ func (vm *VM) call(function *LoxFunction, argCount int) bool {
 	}
 	frame := &vm.frames[vm.frameCount]
 	vm.frameCount++
-	frame.function = function
+	frame.closure = closure
 	frame.ip = 0
 	frame.slots_base = vm.vstackCount - argCount - 1
 	return true
 }
 
 func (vm *VM) callValue(callee Value, argCount int) bool {
-	if callee.IsFunction() {
-		function, _ := callee.GetFunction()
-		return vm.call(function, argCount)
+	if callee.IsClosure() {
+		closure, _ := callee.GetClosure()
+		return vm.call(closure, argCount)
 	} else if callee.IsNative() {
 		native, _ := callee.GetNative()
 		result := native(argCount, &vm.vstack[vm.vstackCount-argCount])
@@ -123,13 +126,44 @@ func (vm *VM) callValue(callee Value, argCount int) bool {
 	return false
 }
 
+// local is vstack absolutely offset
+func (vm *VM) CaptureUpvalue(value *Value, local int) *UpvalueObj {
+	var previousUpvalue *UpvalueObj = nil
+	var currentUpvalue *UpvalueObj = vm.openUpvalues
+	for currentUpvalue != nil && currentUpvalue.location > local {
+		previousUpvalue = currentUpvalue
+		currentUpvalue = currentUpvalue.next
+	}
+
+	if currentUpvalue != nil && currentUpvalue.location == local {
+		return currentUpvalue
+	}
+	createdUpvalue := NewUpvalueObj(value, local)
+	createdUpvalue.next = currentUpvalue
+	if previousUpvalue == nil {
+		vm.openUpvalues = createdUpvalue
+	} else {
+		previousUpvalue.next = createdUpvalue
+	}
+	return createdUpvalue
+}
+
+func (vm *VM) closeUpvalues(last int) {
+	for vm.openUpvalues != nil && vm.openUpvalues.location >= last {
+		upvalue := vm.openUpvalues
+		upvalue.closed = *upvalue.ref
+		upvalue.ref = &upvalue.closed
+		vm.openUpvalues = upvalue.next
+	}
+}
+
 func (vm *VM) RuntimeError(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format, args...)
 	fmt.Fprintf(os.Stderr, "\n")
 
 	for i := vm.frameCount - 1; i >= 0; i-- {
 		frame := &vm.frames[i]
-		function := frame.function
+		function := frame.closure.function
 		fmt.Fprintf(os.Stderr, "[line %d] in ", function.chunk.lines[frame.ip])
 		if function.name == "" {
 			fmt.Fprintf(os.Stderr, "script\n")
@@ -145,7 +179,7 @@ func (vm *VM) runVM() bool {
 	frame := &vm.frames[vm.frameCount-1]
 
 	for {
-		if frame.ip >= len(frame.function.chunk.bcodes) {
+		if frame.ip >= len(frame.closure.function.chunk.bcodes) {
 			break
 		}
 		DebugVM(vm)
@@ -156,13 +190,13 @@ func (vm *VM) runVM() bool {
 		case OP_CONSTANT:
 			vm.pushVstack(frame.readConstant())
 		case OP_NIL:
-			vm.pushVstack(NewNil())
+			vm.pushVstack(NilVal())
 		case OP_FALSE:
-			vm.pushVstack(NewBool(false))
+			vm.pushVstack(BoolVal(false))
 		case OP_TRUE:
-			vm.pushVstack(NewBool(true))
+			vm.pushVstack(BoolVal(true))
 		case OP_NOT:
-			vm.pushVstack(NewBool(isfalsey(vm.peekVstack(0))))
+			vm.pushVstack(BoolVal(isfalsey(vm.peekVstack(0))))
 		case OP_NEGATE:
 			if !(vm.peekVstack(0).IsFloat()) {
 				vm.RuntimeError("Operand must be number for negate op.")
@@ -170,16 +204,16 @@ func (vm *VM) runVM() bool {
 			}
 			value := vm.popVstack()
 			tmp, _ := value.GetFloat()
-			vm.pushVstack(NewFloat(-tmp))
+			vm.pushVstack(FloatVal(-tmp))
 		case OP_EQUAL:
 			right := vm.popVstack()
 			left := vm.popVstack()
-			vm.pushVstack(NewBool(IsValueEqual(&left, &right)))
+			vm.pushVstack(BoolVal(IsValueEqual(&left, &right)))
 		case OP_GREATER:
 			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
 				right, _ := vm.popVstack().GetFloat()
 				left, _ := vm.popVstack().GetFloat()
-				vm.pushVstack(NewBool(left > right))
+				vm.pushVstack(BoolVal(left > right))
 			} else {
 				vm.RuntimeError("Operand must be number for > op.")
 				return false
@@ -188,7 +222,7 @@ func (vm *VM) runVM() bool {
 			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
 				right, _ := vm.popVstack().GetFloat()
 				left, _ := vm.popVstack().GetFloat()
-				vm.pushVstack(NewBool(left < right))
+				vm.pushVstack(BoolVal(left < right))
 			} else {
 				vm.RuntimeError("Operand must be number for > op.")
 				return false
@@ -197,11 +231,11 @@ func (vm *VM) runVM() bool {
 			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
 				right, _ := vm.popVstack().GetFloat()
 				left, _ := vm.popVstack().GetFloat()
-				vm.pushVstack(NewFloat(left + right))
+				vm.pushVstack(FloatVal(left + right))
 			} else if vm.peekVstack(0).IsString() && vm.peekVstack(1).IsString() {
 				right, _ := vm.popVstack().GetString()
 				left, _ := vm.popVstack().GetString()
-				vm.pushVstack(NewString(left + right))
+				vm.pushVstack(StringVal(left + right))
 			} else {
 				vm.RuntimeError("Operand must be number or string for add op.")
 				return false
@@ -210,7 +244,7 @@ func (vm *VM) runVM() bool {
 			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
 				right, _ := vm.popVstack().GetFloat()
 				left, _ := vm.popVstack().GetFloat()
-				vm.pushVstack(NewFloat(left - right))
+				vm.pushVstack(FloatVal(left - right))
 			} else {
 				vm.RuntimeError("Operand must be number for sub op.")
 				return false
@@ -219,7 +253,7 @@ func (vm *VM) runVM() bool {
 			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
 				right, _ := vm.popVstack().GetFloat()
 				left, _ := vm.popVstack().GetFloat()
-				vm.pushVstack(NewFloat(left * right))
+				vm.pushVstack(FloatVal(left * right))
 			} else {
 				vm.RuntimeError("Operand must be number for multiply op.")
 				return false
@@ -228,13 +262,14 @@ func (vm *VM) runVM() bool {
 			if vm.peekVstack(0).IsFloat() && vm.peekVstack(1).IsFloat() {
 				right, _ := vm.popVstack().GetFloat()
 				left, _ := vm.popVstack().GetFloat()
-				vm.pushVstack(NewFloat(left / right))
+				vm.pushVstack(FloatVal(left / right))
 			} else {
 				vm.RuntimeError("Operand must be number for divide op.")
 				return false
 			}
 		case OP_RETURN:
 			result := vm.popVstack()
+			vm.closeUpvalues(frame.slots_base)
 			vm.frameCount--
 			if vm.frameCount == 0 {
 				vm.popVstack()
@@ -264,7 +299,7 @@ func (vm *VM) runVM() bool {
 			isNewKey := tableSet(vm.globals, name, vm.peekVstack(0))
 			if isNewKey {
 				tableDelete(vm.globals, name)
-				vm.RuntimeError("Undefined variable '%s'. when SET_GLOBAL", name)
+				vm.RuntimeError("Undefined variable '%s' when SET_GLOBAL.", name)
 				return false
 			}
 		case OP_GET_LOCAL:
@@ -273,6 +308,12 @@ func (vm *VM) runVM() bool {
 		case OP_SET_LOCAL:
 			slot := frame.readByte()
 			vm.vstack[frame.slots_base+int(slot)] = vm.peekVstack(0)
+		case OP_GET_UPVALUE:
+			slot := frame.readByte()
+			vm.pushVstack(*frame.closure.upvalues[slot].ref)
+		case OP_SET_UPVALUE:
+			slot := frame.readByte()
+			*frame.closure.upvalues[slot].ref = vm.peekVstack(0)
 		case OP_JUMP:
 			offset := frame.readShort()
 			frame.ip += int(offset)
@@ -290,14 +331,36 @@ func (vm *VM) runVM() bool {
 				return false
 			}
 			frame = &vm.frames[vm.frameCount-1]
+		case OP_CLOSURE:
+			val := frame.readConstant()
+			function, ok := val.GetFunction()
+			if !ok {
+				vm.RuntimeError("Expect LoxFunction obj for OP_CLOSURE.")
+				return false
+			}
+			closure := NewClosure(function)
+			vm.pushVstack(ClosureVal(closure))
+
+			for i := 0; i < len(closure.upvalues); i++ {
+				isLocal := frame.readByte()
+				index := frame.readByte()
+				if isLocal != 0 {
+					closure.upvalues[i] = vm.CaptureUpvalue(&vm.vstack[frame.slots_base+int(index)], frame.slots_base+int(index))
+				} else {
+					closure.upvalues[i] = frame.closure.upvalues[index]
+				}
+			}
+		case OP_CLOSE_UPVALUE:
+			vm.closeUpvalues(vm.vstackCount - 1)
+			vm.popVstack()
 		}
 	}
 	return true
 }
 
 func (vm *VM) DefineNative(name string, function NativeFn) {
-	vm.pushVstack(NewString(name))
-	vm.pushVstack(NewNative(function))
+	vm.pushVstack(StringVal(name))
+	vm.pushVstack(NativeVal(function))
 	tmp, _ := vm.peekVstack(1).GetString()
 	tableSet(vm.globals, tmp, vm.peekVstack(0))
 	vm.popVstack()
@@ -310,8 +373,9 @@ func Interprete(function *LoxFunction) {
 	vm.resetStack()
 	vm.DefineNative("clock", ClockNative)
 
-	vm.pushVstack(NewFunction(function))
-	vm.call(function, 0)
+	clousre := NewClosure(function)
+	vm.pushVstack(ClosureVal(clousre))
+	vm.call(clousre, 0)
 
 	ok := vm.runVM()
 	if !ok {
