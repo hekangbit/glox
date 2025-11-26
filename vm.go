@@ -115,6 +115,11 @@ func (vm *VM) callValue(callee Value, argCount int) bool {
 	if callee.IsClosure() {
 		closure, _ := callee.GetClosure()
 		return vm.call(closure, argCount)
+	} else if callee.IsClass() {
+		klass, _ := callee.GetClass()
+		instance := NewInstance(klass)
+		vm.vstack[vm.vstackCount-argCount-1] = InstanceVal(instance)
+		return true
 	} else if callee.IsNative() {
 		native, _ := callee.GetNative()
 		result := native(argCount, &vm.vstack[vm.vstackCount-argCount])

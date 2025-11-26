@@ -62,6 +62,11 @@ func NewClass(name string) *LoxClass {
 	return &LoxClass{name: name}
 }
 
+func NewInstance(klass *LoxClass) *LoxInstance {
+	instance := LoxInstance{klass: klass, fields: make(map[string]Value)}
+	return &instance
+}
+
 func isSameType(v1 *Value, v2 *Value) bool {
 	if v1.value == nil && v2.value == nil {
 		return true
@@ -116,6 +121,10 @@ func ClassVal(class *LoxClass) Value {
 	return Value{value: class}
 }
 
+func InstanceVal(instance *LoxInstance) Value {
+	return Value{value: instance}
+}
+
 func (v Value) IsNil() bool {
 	return v.value == nil
 }
@@ -157,6 +166,11 @@ func (v Value) IsClosure() bool {
 
 func (v Value) IsClass() bool {
 	_, ok := v.value.(*LoxClass)
+	return ok
+}
+
+func (v Value) IsInstance() bool {
+	_, ok := v.value.(*LoxInstance)
 	return ok
 }
 
@@ -218,6 +232,14 @@ func (v Value) GetClosure() (*LoxClosure, bool) {
 
 func (v Value) GetClass() (*LoxClass, bool) {
 	result, ok := v.value.(*LoxClass)
+	if ok {
+		return result, true
+	}
+	return nil, false
+}
+
+func (v Value) GetInstance() (*LoxInstance, bool) {
+	result, ok := v.value.(*LoxInstance)
 	if ok {
 		return result, true
 	}
@@ -300,8 +322,11 @@ func (v Value) String() string {
 	case NativeFn:
 		return "<native fn>"
 	case *LoxClass:
-		class, _ := v.value.(*LoxClass)
-		return class.name
+		klass, _ := v.value.(*LoxClass)
+		return klass.name
+	case *LoxInstance:
+		instance, _ := v.value.(*LoxInstance)
+		return instance.klass.name + " instance"
 	default:
 		return "unknown"
 	}
