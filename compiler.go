@@ -678,6 +678,17 @@ func (parser *Parser) functionDeclaration() {
 	parser.defineVariable(global)
 }
 
+func (parser *Parser) classDeclaration() {
+	parser.consume(TOKEN_IDENTIFIER, "Expect class name.")
+	nameConstant := parser.identifierConstant(&parser.previous)
+	parser.declareVariable()
+	parser.emitBytes(OP_CLASS, nameConstant)
+	parser.defineVariable(nameConstant)
+	parser.consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.")
+	parser.consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.")
+
+}
+
 func (parser *Parser) synchronize() {
 	parser.panicMode = false
 	for parser.current.token_type != TOKEN_EOF {
@@ -697,6 +708,8 @@ func (parser *Parser) declaration() {
 		parser.varDeclaration()
 	} else if parser.match(TOKEN_FUN) {
 		parser.functionDeclaration()
+	} else if parser.match(TOKEN_CLASS) {
+		parser.classDeclaration()
 	} else {
 		parser.statement()
 	}

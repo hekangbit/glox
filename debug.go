@@ -107,6 +107,8 @@ func DisassembleInstruction(chunk *Chunk, offset int) int {
 		return offset
 	case OP_CLOSE_UPVALUE:
 		return SimpleInstruction("OP_CLOSE_UPVALUE", offset)
+	case OP_CLASS:
+		return ConstInstruction("OP_CLASS", chunk, offset)
 	default:
 		fmt.Printf("Unknown opcode %v\n", instruction)
 		return offset + 1

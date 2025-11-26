@@ -353,6 +353,9 @@ func (vm *VM) runVM() bool {
 		case OP_CLOSE_UPVALUE:
 			vm.closeUpvalues(vm.vstackCount - 1)
 			vm.popVstack()
+		case OP_CLASS:
+			name, _ := frame.readConstant().GetString()
+			vm.pushVstack(ClassVal(NewClass(name)))
 		}
 	}
 	return true

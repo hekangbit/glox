@@ -30,6 +30,15 @@ type UpvalueObj struct {
 	next     *UpvalueObj
 }
 
+type LoxClass struct {
+	name string
+}
+
+type LoxInstance struct {
+	klass  *LoxClass
+	fields map[string]Value
+}
+
 type NativeFn func(int, *Value) Value
 
 func NewFunction() *LoxFunction {
@@ -47,6 +56,10 @@ func NewClosure(function *LoxFunction) *LoxClosure {
 func NewUpvalueObj(ref *Value, slot int) *UpvalueObj {
 	upvalue := UpvalueObj{ref: ref, location: slot, next: nil, closed: Value{}}
 	return &upvalue
+}
+
+func NewClass(name string) *LoxClass {
+	return &LoxClass{name: name}
 }
 
 func isSameType(v1 *Value, v2 *Value) bool {
@@ -99,6 +112,10 @@ func ClosureVal(closure *LoxClosure) Value {
 	return Value{value: closure}
 }
 
+func ClassVal(class *LoxClass) Value {
+	return Value{value: class}
+}
+
 func (v Value) IsNil() bool {
 	return v.value == nil
 }
@@ -135,6 +152,11 @@ func (v Value) IsNative() bool {
 
 func (v Value) IsClosure() bool {
 	_, ok := v.value.(*LoxClosure)
+	return ok
+}
+
+func (v Value) IsClass() bool {
+	_, ok := v.value.(*LoxClass)
 	return ok
 }
 
@@ -188,6 +210,14 @@ func (v Value) GetNative() (NativeFn, bool) {
 
 func (v Value) GetClosure() (*LoxClosure, bool) {
 	result, ok := v.value.(*LoxClosure)
+	if ok {
+		return result, true
+	}
+	return nil, false
+}
+
+func (v Value) GetClass() (*LoxClass, bool) {
+	result, ok := v.value.(*LoxClass)
 	if ok {
 		return result, true
 	}
@@ -269,6 +299,9 @@ func (v Value) String() string {
 		return NormalizedClosureName(closure)
 	case NativeFn:
 		return "<native fn>"
+	case *LoxClass:
+		class, _ := v.value.(*LoxClass)
+		return class.name
 	default:
 		return "unknown"
 	}
