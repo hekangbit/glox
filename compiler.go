@@ -382,6 +382,17 @@ func (parser *Parser) call(canAssign bool) {
 	parser.emitBytes(OP_CALL, argCount)
 }
 
+func (parser *Parser) dot(canAssign bool) {
+	parser.consume(TOKEN_IDENTIFIER, "Expect property name after '.'.")
+	name := parser.identifierConstant(&parser.previous)
+	if canAssign && parser.match(TOKEN_EQUAL) {
+		parser.expression()
+		parser.emitBytes(OP_SET_PROPERTY, name)
+	} else {
+		parser.emitBytes(OP_GET_PROPERTY, name)
+	}
+}
+
 func (parser *Parser) printStatement() {
 	parser.expression()
 	parser.consume(TOKEN_SEMICOLON, "Expect ';' after value.")
@@ -725,7 +736,7 @@ func (parser *Parser) initParseRule() {
 		TOKEN_LEFT_BRACE:    {nil, nil, PREC_NONE},
 		TOKEN_RIGHT_BRACE:   {nil, nil, PREC_NONE},
 		TOKEN_COMMA:         {nil, nil, PREC_NONE},
-		TOKEN_DOT:           {nil, nil, PREC_NONE},
+		TOKEN_DOT:           {nil, (*Parser).dot, PREC_CALL},
 		TOKEN_MINUS:         {(*Parser).unary, (*Parser).binary, PREC_TERM},
 		TOKEN_PLUS:          {nil, (*Parser).binary, PREC_TERM},
 		TOKEN_SEMICOLON:     {nil, nil, PREC_NONE},

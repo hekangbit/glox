@@ -361,6 +361,31 @@ func (vm *VM) runVM() bool {
 		case OP_CLASS:
 			name, _ := frame.readConstant().GetString()
 			vm.pushVstack(ClassVal(NewClass(name)))
+		case OP_GET_PROPERTY:
+			if !vm.peekVstack(0).IsInstance() {
+				vm.RuntimeError("Only instances have fields when get.")
+				return false
+			}
+			instance, _ := vm.peekVstack(0).GetInstance()
+			fieldName, _ := frame.readConstant().GetString()
+			val, ok := tableGet(instance.fields, fieldName)
+			if !ok {
+				vm.RuntimeError("Undefined property '%s'.", fieldName)
+				return false
+			}
+			vm.popVstack()
+			vm.pushVstack(val)
+		case OP_SET_PROPERTY:
+			if !vm.peekVstack(1).IsInstance() {
+				vm.RuntimeError("Only instances have fields when set.")
+				return false
+			}
+			instance, _ := vm.peekVstack(1).GetInstance()
+			fieldName, _ := frame.readConstant().GetString()
+			tableSet(instance.fields, fieldName, vm.peekVstack(0))
+			value := vm.popVstack()
+			vm.popVstack()
+			vm.pushVstack(value)
 		}
 	}
 	return true
