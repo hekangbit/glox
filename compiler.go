@@ -689,15 +689,27 @@ func (parser *Parser) functionDeclaration() {
 	parser.defineVariable(global)
 }
 
+func (parser *Parser) method() {
+	parser.consume(TOKEN_IDENTIFIER, "Expect method name.")
+	constant := parser.identifierConstant(&parser.previous)
+	parser.function(FN_TYPE_FUNCTION)
+	parser.emitBytes(OP_METHOD, constant)
+}
+
 func (parser *Parser) classDeclaration() {
 	parser.consume(TOKEN_IDENTIFIER, "Expect class name.")
+	classToken := &parser.previous
 	nameConstant := parser.identifierConstant(&parser.previous)
 	parser.declareVariable()
 	parser.emitBytes(OP_CLASS, nameConstant)
 	parser.defineVariable(nameConstant)
+	parser.namedVariable(classToken, false)
 	parser.consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.")
+	for !parser.check(TOKEN_RIGHT_BRACE) && !parser.check(TOKEN_EOF) {
+		parser.method()
+	}
+	parser.emitByte(OP_POP)
 	parser.consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.")
-
 }
 
 func (parser *Parser) synchronize() {

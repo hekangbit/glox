@@ -113,6 +113,8 @@ func DisassembleInstruction(chunk *Chunk, offset int) int {
 		return ConstInstruction("OP_GET_PREPERTY", chunk, offset)
 	case OP_SET_PROPERTY:
 		return ConstInstruction("OP_SET_PROPERTY", chunk, offset)
+	case OP_METHOD:
+		return ConstInstruction("OP_METHOD", chunk, offset)
 	default:
 		fmt.Printf("Unknown opcode %v\n", instruction)
 		return offset + 1

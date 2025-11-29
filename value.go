@@ -31,7 +31,8 @@ type UpvalueObj struct {
 }
 
 type LoxClass struct {
-	name string
+	name    string
+	methods map[string]Value
 }
 
 type LoxInstance struct {
@@ -59,7 +60,7 @@ func NewUpvalueObj(ref *Value, slot int) *UpvalueObj {
 }
 
 func NewClass(name string) *LoxClass {
-	return &LoxClass{name: name}
+	return &LoxClass{name: name, methods: make(map[string]Value)}
 }
 
 func NewInstance(klass *LoxClass) *LoxInstance {

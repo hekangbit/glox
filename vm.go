@@ -386,6 +386,11 @@ func (vm *VM) runVM() bool {
 			value := vm.popVstack()
 			vm.popVstack()
 			vm.pushVstack(value)
+		case OP_METHOD:
+			klass, _ := vm.peekVstack(1).GetClass()
+			methodName, _ := frame.readConstant().GetString()
+			klass.methods[methodName] = vm.peekVstack(0)
+			vm.popVstack()
 		}
 	}
 	return true
