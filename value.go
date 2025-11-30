@@ -40,6 +40,11 @@ type LoxInstance struct {
 	fields map[string]Value
 }
 
+type BoundMethod struct {
+	receiver Value
+	method   *LoxClosure
+}
+
 type NativeFn func(int, *Value) Value
 
 func NewFunction() *LoxFunction {
@@ -64,8 +69,11 @@ func NewClass(name string) *LoxClass {
 }
 
 func NewInstance(klass *LoxClass) *LoxInstance {
-	instance := LoxInstance{klass: klass, fields: make(map[string]Value)}
-	return &instance
+	return &LoxInstance{klass: klass, fields: make(map[string]Value)}
+}
+
+func NewBoundMethod(receiver Value, method *LoxClosure) *BoundMethod {
+	return &BoundMethod{receiver: receiver, method: method}
 }
 
 func isSameType(v1 *Value, v2 *Value) bool {
@@ -126,6 +134,10 @@ func InstanceVal(instance *LoxInstance) Value {
 	return Value{value: instance}
 }
 
+func BoundMethodVal(boundMethod *BoundMethod) Value {
+	return Value{value: boundMethod}
+}
+
 func (v Value) IsNil() bool {
 	return v.value == nil
 }
@@ -172,6 +184,11 @@ func (v Value) IsClass() bool {
 
 func (v Value) IsInstance() bool {
 	_, ok := v.value.(*LoxInstance)
+	return ok
+}
+
+func (v Value) IsBoundMethod() bool {
+	_, ok := v.value.(*BoundMethod)
 	return ok
 }
 
@@ -241,6 +258,14 @@ func (v Value) GetClass() (*LoxClass, bool) {
 
 func (v Value) GetInstance() (*LoxInstance, bool) {
 	result, ok := v.value.(*LoxInstance)
+	if ok {
+		return result, true
+	}
+	return nil, false
+}
+
+func (v Value) GetBoundMethod() (*BoundMethod, bool) {
+	result, ok := v.value.(*BoundMethod)
 	if ok {
 		return result, true
 	}
@@ -328,6 +353,9 @@ func (v Value) String() string {
 	case *LoxInstance:
 		instance, _ := v.value.(*LoxInstance)
 		return instance.klass.name + " instance"
+	case *BoundMethod:
+		boundMethod, _ := v.value.(*BoundMethod)
+		return boundMethod.method.function.name
 	default:
 		return "unknown"
 	}

@@ -120,6 +120,9 @@ func (vm *VM) callValue(callee Value, argCount int) bool {
 		instance := NewInstance(klass)
 		vm.vstack[vm.vstackCount-argCount-1] = InstanceVal(instance)
 		return true
+	} else if callee.IsBoundMethod() {
+		boundMethod, _ := callee.GetBoundMethod()
+		return vm.call(boundMethod.method, argCount)
 	} else if callee.IsNative() {
 		native, _ := callee.GetNative()
 		result := native(argCount, &vm.vstack[vm.vstackCount-argCount])
@@ -160,6 +163,18 @@ func (vm *VM) closeUpvalues(last int) {
 		upvalue.ref = &upvalue.closed
 		vm.openUpvalues = upvalue.next
 	}
+}
+
+func (vm *VM) bindMethod(klass *LoxClass, name string) bool {
+	val, ok := tableGet(klass.methods, name)
+	if !ok {
+		return false
+	}
+	method, _ := val.GetClosure()
+	boundMethod := NewBoundMethod(vm.peekVstack(0), method)
+	vm.popVstack() // pop instance value
+	vm.pushVstack(BoundMethodVal(boundMethod))
+	return true
 }
 
 func (vm *VM) RuntimeError(format string, args ...interface{}) {
@@ -367,14 +382,18 @@ func (vm *VM) runVM() bool {
 				return false
 			}
 			instance, _ := vm.peekVstack(0).GetInstance()
-			fieldName, _ := frame.readConstant().GetString()
-			val, ok := tableGet(instance.fields, fieldName)
-			if !ok {
-				vm.RuntimeError("Undefined property '%s'.", fieldName)
-				return false
+			name, _ := frame.readConstant().GetString()
+			val, ok := tableGet(instance.fields, name)
+			if ok {
+				vm.popVstack()
+				vm.pushVstack(val)
+				break
 			}
-			vm.popVstack()
-			vm.pushVstack(val)
+			if vm.bindMethod(instance.klass, name) {
+				break
+			}
+			vm.RuntimeError("Undefined property '%s'.", name)
+			return false
 		case OP_SET_PROPERTY:
 			if !vm.peekVstack(1).IsInstance() {
 				vm.RuntimeError("Only instances have fields when set.")
