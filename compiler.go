@@ -41,13 +41,14 @@ type ParseRule struct {
 }
 
 type Parser struct {
-	scanner   Scanner
-	current   Token
-	previous  Token
-	rules     map[byte]ParseRule
-	hadError  bool
-	panicMode bool
-	compiler  *Compiler
+	scanner      Scanner
+	current      Token
+	previous     Token
+	rules        map[byte]ParseRule
+	hadError     bool
+	panicMode    bool
+	compiler     *Compiler
+	currentClass *ClassCompiler
 }
 
 type Local struct {
@@ -69,6 +70,10 @@ type Compiler struct {
 	function   *LoxFunction
 	fnType     int
 	enclosing  *Compiler
+}
+
+type ClassCompiler struct {
+	enclosing *ClassCompiler
 }
 
 func identifiersEqual(a *Token, b *Token) bool {
@@ -704,6 +709,9 @@ func (parser *Parser) classDeclaration() {
 	parser.declareVariable()
 	parser.emitBytes(OP_CLASS, nameConstant)
 	parser.defineVariable(nameConstant)
+	classCompiler := ClassCompiler{}
+	classCompiler.enclosing = parser.currentClass
+	parser.currentClass = &classCompiler
 	parser.namedVariable(classToken, false)
 	parser.consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.")
 	for !parser.check(TOKEN_RIGHT_BRACE) && !parser.check(TOKEN_EOF) {
@@ -711,6 +719,7 @@ func (parser *Parser) classDeclaration() {
 	}
 	parser.emitByte(OP_POP)
 	parser.consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.")
+	parser.currentClass = classCompiler.enclosing
 }
 
 func (parser *Parser) synchronize() {
@@ -743,6 +752,10 @@ func (parser *Parser) declaration() {
 }
 
 func (parser *Parser) thisExpr(canAssign bool) {
+	if parser.currentClass == nil {
+		parser.errorAtPrevious("Can't use 'this' outside of a class.")
+		return
+	}
 	parser.variable(false)
 }
 
@@ -827,7 +840,7 @@ func (parser *Parser) endCompiler() *LoxFunction {
 
 func Compile(source string) (bool, *LoxFunction) {
 	var compiler Compiler
-	parser := Parser{scanner: Scanner{1, 0, 0, source}, hadError: false, panicMode: false}
+	parser := Parser{scanner: Scanner{1, 0, 0, source}, hadError: false, panicMode: false, currentClass: nil}
 	parser.advance()
 
 	parser.initParseRule()
