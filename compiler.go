@@ -24,6 +24,7 @@ const (
 const (
 	FN_TYPE_SCRIPT int = iota + 0
 	FN_TYPE_FUNCTION
+	FN_TYPE_METHOD
 )
 
 const (
@@ -692,7 +693,7 @@ func (parser *Parser) functionDeclaration() {
 func (parser *Parser) method() {
 	parser.consume(TOKEN_IDENTIFIER, "Expect method name.")
 	constant := parser.identifierConstant(&parser.previous)
-	parser.function(FN_TYPE_FUNCTION)
+	parser.function(FN_TYPE_METHOD)
 	parser.emitBytes(OP_METHOD, constant)
 }
 
@@ -741,6 +742,10 @@ func (parser *Parser) declaration() {
 	}
 }
 
+func (parser *Parser) thisExpr(canAssign bool) {
+	parser.variable(false)
+}
+
 func (parser *Parser) initParseRule() {
 	parser.rules = map[byte]ParseRule{
 		TOKEN_LEFT_PAREN:    {(*Parser).grouping, (*Parser).call, PREC_CALL},
@@ -777,7 +782,7 @@ func (parser *Parser) initParseRule() {
 		TOKEN_PRINT:         {nil, nil, PREC_NONE},
 		TOKEN_RETURN:        {nil, nil, PREC_NONE},
 		TOKEN_SUPER:         {nil, nil, PREC_NONE},
-		TOKEN_THIS:          {nil, nil, PREC_NONE},
+		TOKEN_THIS:          {(*Parser).thisExpr, nil, PREC_NONE},
 		TOKEN_TRUE:          {(*Parser).boolLiteral, nil, PREC_NONE},
 		TOKEN_VAR:           {nil, nil, PREC_NONE},
 		TOKEN_WHILE:         {nil, nil, PREC_NONE},
@@ -796,12 +801,13 @@ func (parser *Parser) initCompiler(compiler *Compiler, fnType int) {
 		compiler.function.name = parser.previous.lexeme
 	}
 
-	local := compiler.locals[compiler.localCount]
+	local := &compiler.locals[compiler.localCount]
 	compiler.localCount++
 	local.depth = 0
 	local.isCaptured = false
-	local.name.lexeme = ""
-	if fnType != FN_TYPE_FUNCTION {
+	if fnType == FN_TYPE_FUNCTION {
+		local.name.lexeme = ""
+	} else {
 		local.name.lexeme = "this"
 	}
 

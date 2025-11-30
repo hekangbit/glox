@@ -122,6 +122,7 @@ func (vm *VM) callValue(callee Value, argCount int) bool {
 		return true
 	} else if callee.IsBoundMethod() {
 		boundMethod, _ := callee.GetBoundMethod()
+		vm.vstack[vm.vstackCount-argCount-1] = boundMethod.receiver
 		return vm.call(boundMethod.method, argCount)
 	} else if callee.IsNative() {
 		native, _ := callee.GetNative()
