@@ -25,6 +25,7 @@ const (
 	FN_TYPE_SCRIPT int = iota + 0
 	FN_TYPE_FUNCTION
 	FN_TYPE_METHOD
+	FN_TYPE_INITIALIZER
 )
 
 const (
@@ -114,7 +115,11 @@ func (parser *Parser) emitConstant(value Value) {
 }
 
 func (parser *Parser) emitReturn() {
-	parser.emitByte(OP_NIL)
+	if parser.compiler.fnType == FN_TYPE_INITIALIZER {
+		parser.emitBytes(OP_GET_LOCAL, 0)
+	} else {
+		parser.emitByte(OP_NIL)
+	}
 	parser.emitByte(OP_RETURN)
 }
 
@@ -556,6 +561,9 @@ func (parser *Parser) returnStatement() {
 	if parser.match(TOKEN_SEMICOLON) {
 		parser.emitReturn()
 	} else {
+		if parser.compiler.fnType == FN_TYPE_INITIALIZER {
+			parser.errorAtPrevious("Can't return a value from an initializer.")
+		}
 		parser.expression()
 		parser.consume(TOKEN_SEMICOLON, "Expect ';' after return value.")
 		parser.emitByte(OP_RETURN)
@@ -698,7 +706,11 @@ func (parser *Parser) functionDeclaration() {
 func (parser *Parser) method() {
 	parser.consume(TOKEN_IDENTIFIER, "Expect method name.")
 	constant := parser.identifierConstant(&parser.previous)
-	parser.function(FN_TYPE_METHOD)
+	fnType := FN_TYPE_METHOD
+	if parser.previous.lexeme == "init" {
+		fnType = FN_TYPE_INITIALIZER
+	}
+	parser.function(fnType)
 	parser.emitBytes(OP_METHOD, constant)
 }
 
