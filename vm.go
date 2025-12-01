@@ -119,6 +119,15 @@ func (vm *VM) callValue(callee Value, argCount int) bool {
 		klass, _ := callee.GetClass()
 		instance := NewInstance(klass)
 		vm.vstack[vm.vstackCount-argCount-1] = InstanceVal(instance)
+		initializer, ok := tableGet(klass.methods, "init")
+		if ok {
+			closure, _ := initializer.GetClosure()
+			return vm.call(closure, argCount)
+		}
+		if argCount != 0 {
+			vm.RuntimeError("Expected 0 arguments, but got %d.", argCount)
+			return false
+		}
 		return true
 	} else if callee.IsBoundMethod() {
 		boundMethod, _ := callee.GetBoundMethod()
