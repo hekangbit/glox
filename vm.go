@@ -187,6 +187,28 @@ func (vm *VM) bindMethod(klass *LoxClass, name string) bool {
 	return true
 }
 
+func (vm *VM) invoke(methodName string, argCount int) bool {
+	instance, isInstance := vm.peekVstack(argCount).GetInstance()
+	if !isInstance {
+		vm.RuntimeError("Only instances have methods.")
+		return false
+	}
+	fieldVal, hasField := tableGet(instance.fields, methodName)
+	if hasField {
+		vm.vstack[vm.vstackCount-argCount-1] = fieldVal
+		vm.callValue(fieldVal, argCount)
+		return true
+	}
+	closureVal, hasMethod := tableGet(instance.klass.methods, methodName)
+	if hasMethod {
+		closure, _ := closureVal.GetClosure()
+		vm.call(closure, int(argCount))
+		return true
+	}
+	vm.RuntimeError("Undefined property '%s'.", methodName)
+	return false
+}
+
 func (vm *VM) RuntimeError(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format, args...)
 	fmt.Fprintf(os.Stderr, "\n")
@@ -419,7 +441,14 @@ func (vm *VM) runVM() bool {
 			klass, _ := vm.peekVstack(1).GetClass()
 			methodName, _ := frame.readConstant().GetString()
 			klass.methods[methodName] = vm.peekVstack(0)
-			vm.popVstack()
+			vm.popVstack() // pop the closure obj
+		case OP_INVOKE:
+			methodName, _ := frame.readConstant().GetString()
+			argCount := frame.readByte()
+			if !vm.invoke(methodName, int(argCount)) {
+				return false
+			}
+			frame = &vm.frames[vm.frameCount-1]
 		}
 	}
 	return true

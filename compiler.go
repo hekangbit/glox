@@ -399,6 +399,10 @@ func (parser *Parser) dot(canAssign bool) {
 	if canAssign && parser.match(TOKEN_EQUAL) {
 		parser.expression()
 		parser.emitBytes(OP_SET_PROPERTY, name)
+	} else if parser.match(TOKEN_LEFT_PAREN) {
+		argCount := parser.argumentList()
+		parser.emitBytes(OP_INVOKE, name)
+		parser.emitByte(argCount)
 	} else {
 		parser.emitBytes(OP_GET_PROPERTY, name)
 	}

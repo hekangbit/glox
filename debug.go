@@ -27,6 +27,14 @@ func JumpInstruction(name string, sign int, chunk *Chunk, offset int) int {
 	return offset + 3
 }
 
+func InvokeInstruction(name string, chunk *Chunk, offset int) int {
+	constant_index := chunk.bcodes[offset+1]
+	argCount := chunk.bcodes[offset+2]
+	fmt.Printf("%-16s (%d args) %4d '", name, argCount, constant_index)
+	fmt.Printf("%v'\n", chunk.constants[constant_index])
+	return offset + 3
+}
+
 func DisassembleInstruction(chunk *Chunk, offset int) int {
 	fmt.Printf("%04d ", offset)
 
@@ -115,6 +123,8 @@ func DisassembleInstruction(chunk *Chunk, offset int) int {
 		return ConstInstruction("OP_SET_PROPERTY", chunk, offset)
 	case OP_METHOD:
 		return ConstInstruction("OP_METHOD", chunk, offset)
+	case OP_INVOKE:
+		return InvokeInstruction("OP_INVOKE", chunk, offset)
 	default:
 		fmt.Printf("Unknown opcode %v\n", instruction)
 		return offset + 1
