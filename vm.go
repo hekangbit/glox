@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"os"
 )
@@ -50,6 +51,10 @@ func tableGet(table map[string]Value, name string) (Value, bool) {
 
 func tableDelete(table map[string]Value, name string) {
 	delete(table, name)
+}
+
+func (vm *VM) tableAddAll(srcTable map[string]Value, dstTable map[string]Value) {
+	maps.Copy(dstTable, srcTable)
 }
 
 func (frame *CallFrame) readByte() byte {
@@ -449,6 +454,16 @@ func (vm *VM) runVM() bool {
 				return false
 			}
 			frame = &vm.frames[vm.frameCount-1]
+		case OP_INHERIT:
+			subKlass, _ := vm.peekVstack(0).GetClass()
+			superKlass, isClass := vm.peekVstack(1).GetClass()
+			if !isClass {
+				vm.RuntimeError("Superclass must be a class.")
+				return false
+			}
+			vm.tableAddAll(superKlass.methods, subKlass.methods)
+			vm.popVstack()
+			vm.popVstack()
 		}
 	}
 	return true

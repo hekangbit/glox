@@ -74,7 +74,8 @@ type Compiler struct {
 }
 
 type ClassCompiler struct {
-	enclosing *ClassCompiler
+	enclosing     *ClassCompiler
+	hasSuperclass bool
 }
 
 func identifiersEqual(a *Token, b *Token) bool {
@@ -720,22 +721,33 @@ func (parser *Parser) method() {
 
 func (parser *Parser) classDeclaration() {
 	parser.consume(TOKEN_IDENTIFIER, "Expect class name.")
-	classToken := &parser.previous
+	classToken := parser.previous
 	nameConstant := parser.identifierConstant(&parser.previous)
 	parser.declareVariable()
-	parser.emitBytes(OP_CLASS, nameConstant)
-	parser.defineVariable(nameConstant)
-	classCompiler := ClassCompiler{}
-	classCompiler.enclosing = parser.currentClass
+	parser.emitBytes(OP_CLASS, nameConstant) // 1.push class value into stack
+	parser.defineVariable(nameConstant)      // 2.define class, class value at top stack
+	classCompiler := ClassCompiler{enclosing: parser.currentClass, hasSuperclass: false}
 	parser.currentClass = &classCompiler
-	parser.namedVariable(classToken, false)
+	if parser.match(TOKEN_LESS) {
+		parser.consume(TOKEN_IDENTIFIER, "Expect superclass name.")
+		parser.variable(false)
+		if identifiersEqual(&classToken, &parser.previous) {
+			parser.errorAtPrevious("A class can't inherit from itself.")
+		}
+
+		parser.namedVariable(&classToken, false)
+		parser.emitByte(OP_INHERIT)
+		classCompiler.hasSuperclass = true
+	}
+	parser.namedVariable(&classToken, false) // help to bind method to class
 	parser.consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.")
 	for !parser.check(TOKEN_RIGHT_BRACE) && !parser.check(TOKEN_EOF) {
 		parser.method()
 	}
 	parser.emitByte(OP_POP)
 	parser.consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.")
-	parser.currentClass = classCompiler.enclosing
+
+	parser.currentClass = parser.currentClass.enclosing
 }
 
 func (parser *Parser) synchronize() {

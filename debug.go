@@ -125,6 +125,8 @@ func DisassembleInstruction(chunk *Chunk, offset int) int {
 		return ConstInstruction("OP_METHOD", chunk, offset)
 	case OP_INVOKE:
 		return InvokeInstruction("OP_INVOKE", chunk, offset)
+	case OP_INHERIT:
+		return SimpleInstruction("OP_INHERIT", offset)
 	default:
 		fmt.Printf("Unknown opcode %v\n", instruction)
 		return offset + 1
