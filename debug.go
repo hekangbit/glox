@@ -147,13 +147,16 @@ func DebugVM(vm *VM) {
 	if !DebugFlag {
 		return
 	}
+	frame := &vm.frames[vm.frameCount-1]
 	fmt.Print("          ")
 	for i := 0; i < vm.vstackCount; i++ {
+		if i == frame.slots_base {
+			fmt.Print("^")
+		}
 		fmt.Print("[ ")
 		fmt.Printf("%s", vm.vstack[i].String())
 		fmt.Print(" ]")
 	}
 	fmt.Print("\n")
-	frame := &vm.frames[vm.frameCount-1]
 	DisassembleInstruction(&frame.closure.function.chunk, frame.ip)
 }
