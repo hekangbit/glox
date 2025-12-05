@@ -719,6 +719,11 @@ func (parser *Parser) method() {
 	parser.emitBytes(OP_METHOD, constant)
 }
 
+func (parser *Parser) syntheticToken(name string) Token {
+	var token Token = Token{lexeme: name}
+	return token
+}
+
 func (parser *Parser) classDeclaration() {
 	parser.consume(TOKEN_IDENTIFIER, "Expect class name.")
 	classToken := parser.previous
@@ -730,11 +735,14 @@ func (parser *Parser) classDeclaration() {
 	parser.currentClass = &classCompiler
 	if parser.match(TOKEN_LESS) {
 		parser.consume(TOKEN_IDENTIFIER, "Expect superclass name.")
-		parser.variable(false)
+		parser.variable(false) // put superklass to stack
 		if identifiersEqual(&classToken, &parser.previous) {
 			parser.errorAtPrevious("A class can't inherit from itself.")
 		}
-
+		parser.beginScope()
+		dummyToken := parser.syntheticToken("super")
+		parser.addLocal(&dummyToken) // consider stack slot which store superklass as local var "super"
+		parser.defineVariable(0)
 		parser.namedVariable(&classToken, false)
 		parser.emitByte(OP_INHERIT)
 		classCompiler.hasSuperclass = true
@@ -746,6 +754,10 @@ func (parser *Parser) classDeclaration() {
 	}
 	parser.emitByte(OP_POP)
 	parser.consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.")
+
+	if classCompiler.hasSuperclass {
+		parser.endScope()
+	}
 
 	parser.currentClass = parser.currentClass.enclosing
 }
@@ -787,6 +799,25 @@ func (parser *Parser) thisExpr(canAssign bool) {
 	parser.variable(false)
 }
 
+func (parser *Parser) superExpr(canAssign bool) {
+	if parser.currentClass == nil {
+		parser.errorAtPrevious("Can't use 'super' outside of a class.")
+	}
+	if !parser.currentClass.hasSuperclass {
+		parser.errorAtPrevious("Can't use 'super' in a class with no superclass.")
+
+	}
+	parser.consume(TOKEN_DOT, "Expect '.' after 'super'.")
+	parser.consume(TOKEN_IDENTIFIER, "Expect superclass method name.")
+	name := parser.identifierConstant(&parser.previous)
+	thisToken := parser.syntheticToken("this")
+	superToken := parser.syntheticToken("super")
+	parser.namedVariable(&thisToken, false)
+	parser.namedVariable(&superToken, false)
+	parser.emitBytes(OP_GET_SUPER, name)
+
+}
+
 func (parser *Parser) initParseRule() {
 	parser.rules = map[byte]ParseRule{
 		TOKEN_LEFT_PAREN:    {(*Parser).grouping, (*Parser).call, PREC_CALL},
@@ -822,7 +853,7 @@ func (parser *Parser) initParseRule() {
 		TOKEN_OR:            {nil, (*Parser).orRule, PREC_OR},
 		TOKEN_PRINT:         {nil, nil, PREC_NONE},
 		TOKEN_RETURN:        {nil, nil, PREC_NONE},
-		TOKEN_SUPER:         {nil, nil, PREC_NONE},
+		TOKEN_SUPER:         {(*Parser).superExpr, nil, PREC_NONE},
 		TOKEN_THIS:          {(*Parser).thisExpr, nil, PREC_NONE},
 		TOKEN_TRUE:          {(*Parser).boolLiteral, nil, PREC_NONE},
 		TOKEN_VAR:           {nil, nil, PREC_NONE},

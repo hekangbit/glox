@@ -53,7 +53,7 @@ func tableDelete(table map[string]Value, name string) {
 	delete(table, name)
 }
 
-func (vm *VM) tableAddAll(srcTable map[string]Value, dstTable map[string]Value) {
+func tableAddAll(srcTable map[string]Value, dstTable map[string]Value) {
 	maps.Copy(dstTable, srcTable)
 }
 
@@ -461,9 +461,21 @@ func (vm *VM) runVM() bool {
 				vm.RuntimeError("Superclass must be a class.")
 				return false
 			}
-			vm.tableAddAll(superKlass.methods, subKlass.methods)
+			tableAddAll(superKlass.methods, subKlass.methods)
 			vm.popVstack()
+		case OP_GET_SUPER:
+			methodName, _ := frame.readConstant().GetString()
+			superKlass, isClass := vm.peekVstack(0).GetClass()
+			if !isClass {
+				vm.RuntimeError("Superclass must be a class when OP_GET_SUPER.")
+				return false
+			}
 			vm.popVstack()
+			if vm.bindMethod(superKlass, methodName) {
+				break
+			}
+			vm.RuntimeError("Undefined property '%s' when OP_GET_SUPER.", methodName)
+			return false
 		}
 	}
 	return true
