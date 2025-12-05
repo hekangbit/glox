@@ -214,6 +214,17 @@ func (vm *VM) invoke(methodName string, argCount int) bool {
 	return false
 }
 
+func (vm *VM) invokeFromClass(klass *LoxClass, methodName string, argCount int) bool {
+	closureVal, hasMethod := tableGet(klass.methods, methodName)
+	if hasMethod {
+		closure, _ := closureVal.GetClosure()
+		vm.call(closure, int(argCount))
+		return true
+	}
+	vm.RuntimeError("Undefined property '%s' when invokeFromClass.", methodName)
+	return false
+}
+
 func (vm *VM) RuntimeError(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format, args...)
 	fmt.Fprintf(os.Stderr, "\n")
@@ -476,6 +487,19 @@ func (vm *VM) runVM() bool {
 			}
 			vm.RuntimeError("Undefined property '%s' when OP_GET_SUPER.", methodName)
 			return false
+		case OP_INVOKE_SUPER:
+			methodName, _ := frame.readConstant().GetString()
+			argCount := frame.readByte()
+			superKlass, isClass := vm.peekVstack(0).GetClass()
+			if !isClass {
+				vm.RuntimeError("Superclass must be a class when OP_INVOKE_SUPER.")
+				return false
+			}
+			vm.popVstack()
+			if !vm.invokeFromClass(superKlass, methodName, int(argCount)) {
+				return false
+			}
+			frame = &vm.frames[vm.frameCount-1]
 		}
 	}
 	return true

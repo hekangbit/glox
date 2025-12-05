@@ -813,9 +813,16 @@ func (parser *Parser) superExpr(canAssign bool) {
 	thisToken := parser.syntheticToken("this")
 	superToken := parser.syntheticToken("super")
 	parser.namedVariable(&thisToken, false)
-	parser.namedVariable(&superToken, false)
-	parser.emitBytes(OP_GET_SUPER, name)
 
+	if parser.match(TOKEN_LEFT_PAREN) {
+		argCount := parser.argumentList()
+		parser.namedVariable(&superToken, false)
+		parser.emitBytes(OP_INVOKE_SUPER, name)
+		parser.emitByte(argCount)
+	} else {
+		parser.namedVariable(&superToken, false)
+		parser.emitBytes(OP_GET_SUPER, name)
+	}
 }
 
 func (parser *Parser) initParseRule() {
