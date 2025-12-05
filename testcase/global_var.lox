@@ -1,0 +1,15 @@
+
+var id = "aaaaa";
+print id;
+id = "bbbbb";
+print id;
+
+var a = "qwe123";
+print a;
+print 4-3;
+
+var beverage = "cafe au lait";
+var breakfast = "beignets with " + beverage;
+print breakfast;
+breakfast = "hello!!";
+print breakfast;

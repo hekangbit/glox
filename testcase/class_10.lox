@@ -1,0 +1,7 @@
+class Brunch {
+  init(food, drink) {
+    print "hello this is init.";
+  }
+}
+
+Brunch("eggs", "coffee");

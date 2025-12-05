@@ -1,0 +1,21 @@
+print "--test only if";
+if (true) {
+  print "haha";
+}
+if (false) {
+  print "haha";
+}
+print "huhu";
+
+print "--test if else";
+if (true) {
+  print "yes";
+} else {
+  print "no";
+}
+
+if (false) {
+  print "yes";
+} else {
+  print "no";
+}

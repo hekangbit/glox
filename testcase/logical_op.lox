@@ -1,0 +1,31 @@
+var a = true;
+var b = false;
+if (a and b) {
+  print "a and b = true";
+} else {
+  print "a and b = false";
+}
+
+a = true;
+b = true;
+if (a and b) {
+  print "a and b = true";
+} else {
+  print "a and b = false";
+}
+
+a = false;
+b = true;
+if (a or b) {
+  print "a or b = true";
+} else {
+  print "a or b = false";
+}
+
+a = false;
+b = false;
+if (a or b) {
+  print "a or b = true";
+} else {
+  print "a or b = false";
+}
